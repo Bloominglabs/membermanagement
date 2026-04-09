@@ -1,6 +1,7 @@
 .pkg/
 .venv/
 .codex/
+.codex
 .pytest_cache/
 __pycache__/
 *.py[cod]
