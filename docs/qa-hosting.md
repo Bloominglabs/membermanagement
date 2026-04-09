@@ -33,14 +33,20 @@ That is enough for Treasurer QA without paying for a larger dedicated box up fro
 As of April 9, 2026:
 
 - DigitalOcean’s Basic Droplets are positioned for low-traffic web servers, small databases, dev/test servers, and microservices.
+- The Basic **2 vCPU / 4 GB RAM** Droplet is listed at **$24.00/month**.
 - DigitalOcean backups on Basic Droplets add **20%** of the Droplet cost for weekly backups or **30%** for daily backups.
+- DigitalOcean Cloud Firewalls are available at **no additional cost**.
+- DigitalOcean Monitoring is a **free, opt-in service**.
 
 Recommended QA setup:
 
 - 1 Basic Droplet, 2 vCPU / 4 GB RAM
 - Daily backups enabled
 
-Use the current DigitalOcean pricing page when creating the Droplet, then add the documented 30% daily-backup surcharge from the backups docs.
+That puts the QA baseline at **about $31.20/month** before bandwidth overages or optional extras:
+
+- `$24.00/month` Droplet
+- `+$7.20/month` daily backups
 
 ## Deployment shape
 
@@ -93,7 +99,9 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.qa.yml --env-
 
 ## Sources
 
+- DigitalOcean Droplet pricing: https://docs.digitalocean.com/products/droplets/details/pricing/
 - DigitalOcean Droplet plan guidance: https://docs.digitalocean.com/products/droplets/concepts/choosing-a-plan/
 - DigitalOcean backups details and pricing: https://docs.digitalocean.com/products/backups/details/
+- DigitalOcean Cloud Firewalls reference: https://docs.digitalocean.com/products/networking/firewalls/reference/
 - DigitalOcean DNS docs: https://docs.digitalocean.com/products/networking/dns/
 - DigitalOcean monitoring overview: https://docs.digitalocean.com/products/monitoring/concepts/metrics/
