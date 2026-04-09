@@ -1,0 +1,21 @@
+{
+  "id": "evt_test_checkout_completed",
+  "object": "event",
+  "type": "checkout.session.completed",
+  "data": {
+    "object": {
+      "id": "cs_test_completed",
+      "created": 1710000000,
+      "payment_intent": "pi_test_checkout",
+      "amount_total": 7000,
+      "currency": "usd",
+      "payment_status": "paid",
+      "metadata": {
+        "member_id": "1",
+        "client_id": "1",
+        "purpose": "top_up",
+        "source_type": "PREPAYMENT_TOPUP"
+      }
+    }
+  }
+}

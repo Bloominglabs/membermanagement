@@ -1,0 +1,13 @@
+{
+  "chargeId": "every-contract-123",
+  "amount": 2500,
+  "netAmount": 2300,
+  "currency": "usd",
+  "frequency": "one_time",
+  "donationDate": "2026-04-04T00:00:00Z",
+  "paymentMethod": "card",
+  "designation": "Laser Cutter",
+  "donor": {
+    "name": "Anonymous Donor"
+  }
+}

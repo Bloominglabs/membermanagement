@@ -1,0 +1,18 @@
+{
+  "id": "evt_test_payment_intent_succeeded",
+  "object": "event",
+  "type": "payment_intent.succeeded",
+  "data": {
+    "object": {
+      "id": "pi_test_success",
+      "created": 1710000000,
+      "amount_received": 5000,
+      "currency": "usd",
+      "metadata": {
+        "member_id": "1",
+        "client_id": "1",
+        "source_type": "DUES_PAYMENT"
+      }
+    }
+  }
+}
