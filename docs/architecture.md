@@ -19,12 +19,11 @@ The repository contained both an older Google Sheets/Apps Script handoff and a n
 - Stripe-first billing path
 - Every.org donation ingestion
 - CSV exports and JSON financial report
-- Management commands for dues close, enforcement, reconciliation reporting, and allowlist refresh
+- Management commands and Celery tasks for dues close, scheduled invoice generation, enforcement, reconciliation reporting, and allowlist refresh
 - On-prem polling agent stub for RFID allowlist sync
 
 ## Known gaps
 
-- No real Celery/Redis job worker yet; scheduled work is exposed as management commands and a simple scheduler loop in Compose
 - Stripe reconciliation and off-session autopay are scaffolded but not yet covered by end-to-end integration tests against Stripe
 - The access agent currently caches allowlist snapshots; hardware bridge behavior still needs the actual door-controller protocol
-
+- Staff-facing HTML workflows are still limited to Django admin and the browsable API; there is not yet a dedicated custom web UI

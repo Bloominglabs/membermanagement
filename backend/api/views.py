@@ -8,9 +8,11 @@ from datetime import date
 from io import StringIO
 
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.db import connections
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from rest_framework import permissions
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -70,6 +72,18 @@ from apps.members.services import get_member_balance
 class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all().order_by("id")
     serializer_class = ClientSerializer
+
+
+class HealthCheckView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            with connections["default"].cursor() as cursor:
+                cursor.execute("SELECT 1")
+        except Exception:
+            return Response({"status": "error"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({"status": "ok"})
 
 
 class MemberViewSet(viewsets.ModelViewSet):

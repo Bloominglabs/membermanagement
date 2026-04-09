@@ -53,3 +53,11 @@ def test_access_api_requires_access_agent_key_or_authenticated_user(settings):
     assert anonymous_response.status_code in {401, 403}
     assert key_response.status_code == 200
     assert entitlement_response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_healthz_is_public():
+    response = DjangoClient().get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"

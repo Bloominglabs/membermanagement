@@ -1,0 +1,13 @@
+{$DOMAIN} {
+    encode zstd gzip
+
+    @static path /static/*
+    handle @static {
+        root * /srv/static
+        file_server
+    }
+
+    handle {
+        reverse_proxy app:8000
+    }
+}
