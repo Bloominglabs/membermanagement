@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import pytest
-from django.test import Client as DjangoClient
 
 from apps.audit.models import AuditLog
 from apps.members.models import Client, ClientAlias, Member, MembershipTerm
 
 
 @pytest.mark.django_db
-def test_client_api_create_and_update_records_aliases_and_audit_log():
-    client = DjangoClient()
-
-    create_response = client.post(
+def test_client_api_create_and_update_records_aliases_and_audit_log(staff_client):
+    create_response = staff_client.post(
         "/api/clients/",
         data={
             "client_type": "PERSON",
@@ -33,7 +30,7 @@ def test_client_api_create_and_update_records_aliases_and_audit_log():
     assert create_response.status_code == 201
     client_id = create_response.json()["id"]
 
-    patch_response = client.patch(
+    patch_response = staff_client.patch(
         f"/api/clients/{client_id}/",
         data={
             "display_name": "Jane M. Maker",
@@ -51,9 +48,8 @@ def test_client_api_create_and_update_records_aliases_and_audit_log():
 
 
 @pytest.mark.django_db
-def test_member_history_endpoint_returns_terms_and_audit_entries():
-    client = DjangoClient()
-    create_response = client.post(
+def test_member_history_endpoint_returns_terms_and_audit_entries(staff_client):
+    create_response = staff_client.post(
         "/api/members/",
         data={
             "client": {
@@ -85,7 +81,7 @@ def test_member_history_endpoint_returns_terms_and_audit_entries():
     assert create_response.status_code == 201
     member_id = create_response.json()["id"]
 
-    patch_response = client.patch(
+    patch_response = staff_client.patch(
         f"/api/members/{member_id}/",
         data={
             "membership_class": "HARDSHIP",
@@ -101,7 +97,7 @@ def test_member_history_endpoint_returns_terms_and_audit_entries():
     assert member.membership_class == Member.MembershipClass.HARDSHIP
     assert MembershipTerm.objects.filter(member=member).count() == 2
 
-    history_response = client.get(f"/api/members/{member_id}/history")
+    history_response = staff_client.get(f"/api/members/{member_id}/history")
 
     assert history_response.status_code == 200
     payload = history_response.json()
@@ -110,7 +106,7 @@ def test_member_history_endpoint_returns_terms_and_audit_entries():
 
 
 @pytest.mark.django_db
-def test_access_entitlement_endpoint_reflects_member_flag():
+def test_access_entitlement_endpoint_reflects_member_flag(staff_client):
     client_record = Client.objects.create(
         client_type=Client.ClientType.PERSON,
         display_name_text="Alex Access",
@@ -125,7 +121,7 @@ def test_access_entitlement_endpoint_reflects_member_flag():
         joined_at="2026-01-01",
     )
 
-    response = DjangoClient().get(f"/api/access/members/{member.pk}/entitlement")
+    response = staff_client.get(f"/api/access/members/{member.pk}/entitlement")
 
     assert response.status_code == 200
     payload = response.json()

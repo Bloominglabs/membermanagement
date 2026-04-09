@@ -5,7 +5,6 @@ import time
 
 import pytest
 import stripe
-from django.test import Client as DjangoClient
 
 from apps.billing.models import Invoice, InvoiceLine, Payment
 from apps.members.models import Client, Member
@@ -34,7 +33,7 @@ def create_member() -> Member:
 
 
 @pytest.mark.django_db
-def test_manual_payment_and_allocate_endpoints():
+def test_manual_payment_and_allocate_endpoints(staff_client):
     member = create_member()
     invoice = Invoice.objects.create(
         client=member.client,
@@ -58,9 +57,7 @@ def test_manual_payment_and_allocate_endpoints():
         line_total_cents=5000,
         amount_cents=5000,
     )
-    client = DjangoClient()
-
-    create_response = client.post(
+    create_response = staff_client.post(
         "/api/payments/manual",
         data={
             "client": member.client.pk,
@@ -79,7 +76,7 @@ def test_manual_payment_and_allocate_endpoints():
 
     assert create_response.status_code == 201
     payment_id = create_response.json()["id"]
-    allocate_response = client.post(
+    allocate_response = staff_client.post(
         f"/api/payments/{payment_id}/allocate",
         data={"invoice_ids": [invoice.pk]},
         content_type="application/json",
@@ -91,11 +88,9 @@ def test_manual_payment_and_allocate_endpoints():
 
 
 @pytest.mark.django_db
-def test_invoice_create_uses_due_offset_and_balances_reports_route():
+def test_invoice_create_uses_due_offset_and_balances_reports_route(staff_client):
     member = create_member()
-    client = DjangoClient()
-
-    response = client.post(
+    response = staff_client.post(
         "/api/invoices/",
         data={
             "client": member.client.pk,
@@ -129,12 +124,12 @@ def test_invoice_create_uses_due_offset_and_balances_reports_route():
     assert response.status_code == 201
     assert response.json()["due_date"] == "2026-04-13"
 
-    balances = client.get("/api/reports/member-balances")
+    balances = staff_client.get("/api/reports/member-balances")
     assert balances.status_code == 200
 
 
 @pytest.mark.django_db
-def test_stripe_checkout_and_setup_views_and_payment_failed_webhook(settings, monkeypatch):
+def test_stripe_checkout_and_setup_views_and_payment_failed_webhook(settings, monkeypatch, staff_client):
     settings.STRIPE_SECRET_KEY = "sk_test"
     settings.STRIPE_WEBHOOK_SECRET = "whsec_test"
     member = create_member()
@@ -150,13 +145,12 @@ def test_stripe_checkout_and_setup_views_and_payment_failed_webhook(settings, mo
         lambda **kwargs: {"id": "seti_view", "client_secret": "secret_view"},
     )
 
-    client = DjangoClient()
-    checkout_response = client.post(
+    checkout_response = staff_client.post(
         "/api/stripe/create-checkout-session",
         data={"member_id": member.pk, "mode": "top_up", "amount_cents": 1500},
         content_type="application/json",
     )
-    setup_response = client.post(
+    setup_response = staff_client.post(
         "/api/stripe/create-setup-intent",
         data={"member_id": member.pk},
         content_type="application/json",
@@ -185,7 +179,9 @@ def test_stripe_checkout_and_setup_views_and_payment_failed_webhook(settings, mo
     }
     payload = json.dumps(event).encode("utf-8")
     header = stripe_signature_header(payload, settings.STRIPE_WEBHOOK_SECRET)
-    webhook_response = client.post(
+    from django.test import Client as DjangoClient
+
+    webhook_response = DjangoClient().post(
         "/webhooks/stripe/",
         data=payload,
         content_type="application/json",
@@ -197,16 +193,15 @@ def test_stripe_checkout_and_setup_views_and_payment_failed_webhook(settings, mo
 
 
 @pytest.mark.django_db
-def test_allowlist_304_and_access_event_endpoint():
+def test_allowlist_304_and_access_event_endpoint(access_agent_client):
     member = create_member()
     member.door_access_enabled = True
     member.save(update_fields=["door_access_enabled", "updated_at"])
-    client = DjangoClient()
 
-    first = client.get("/api/access/allowlist/")
+    first = access_agent_client.get("/api/access/allowlist/")
     etag = first.json()["etag"]
-    second = client.get(f"/api/access/allowlist/?v={etag}")
-    event = client.post(
+    second = access_agent_client.get(f"/api/access/allowlist/?v={etag}")
+    event = access_agent_client.post(
         "/api/access/events/",
         data={"credential_uid": "uid-123", "result": "granted", "member_id": member.pk, "details": {"door": "front"}},
         content_type="application/json",

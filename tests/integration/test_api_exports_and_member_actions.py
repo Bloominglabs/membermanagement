@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
-from django.test import Client as DjangoClient
 
 from apps.billing.models import Invoice, InvoiceLine, Payment
 from apps.members.models import Client, Member
@@ -51,19 +50,18 @@ def create_invoice(member: Member, *, number: str, due_date: date, total_cents: 
 
 
 @pytest.mark.django_db
-def test_member_manual_payment_balance_endpoint_and_csv_exports():
+def test_member_manual_payment_balance_endpoint_and_csv_exports(staff_client):
     member = create_member("CSV Member", "csv-member@example.org")
     create_invoice(member, number="INV-MEMBER-ACTION-001", due_date=date(2026, 4, 15), total_cents=5000)
-    client = DjangoClient()
 
-    manual_payment = client.post(
+    manual_payment = staff_client.post(
         f"/api/members/{member.pk}/manual-payment/",
         data={"amount_cents": 5000, "source_type": "DUES_PAYMENT", "note": "cash box"},
         content_type="application/json",
     )
-    balance_response = client.get(f"/api/members/{member.pk}/balance/")
-    financial_csv = client.get("/api/exports/financial.csv?from=2026-04-01&to=2026-04-30")
-    balances_csv = client.get("/api/exports/member-balances.csv")
+    balance_response = staff_client.get(f"/api/members/{member.pk}/balance/")
+    financial_csv = staff_client.get("/api/exports/financial.csv?from=2026-04-01&to=2026-04-30")
+    balances_csv = staff_client.get("/api/exports/member-balances.csv")
 
     assert manual_payment.status_code == 201
     assert balance_response.status_code == 200
@@ -75,7 +73,7 @@ def test_member_manual_payment_balance_endpoint_and_csv_exports():
 
 
 @pytest.mark.django_db
-def test_ar_aging_report_buckets_include_current_and_overdue_ranges():
+def test_ar_aging_report_buckets_include_current_and_overdue_ranges(staff_client):
     member = create_member("Aging Buckets", "aging-buckets@example.org")
     today = date.today()
     create_invoice(member, number="INV-CURRENT", due_date=today + timedelta(days=1), total_cents=1000)
@@ -96,7 +94,7 @@ def test_ar_aging_report_buckets_include_current_and_overdue_ranges():
     paid_invoice.allocations.create(payment=payment, allocated_cents=1500)
     one_thirty.allocations.create(payment=payment, allocated_cents=200)
 
-    response = DjangoClient().get("/api/reports/ar-aging")
+    response = staff_client.get("/api/reports/ar-aging")
 
     assert response.status_code == 200
     payload = response.json()

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from django.test import Client as DjangoClient
 
 from apps.billing.models import Invoice, InvoiceLine, Payment
 from apps.billing.services import allocate_payment_fifo
@@ -51,13 +50,12 @@ def create_invoice(member: Member, number: str, total_cents: int, status: str = 
 
 
 @pytest.mark.django_db
-def test_invoice_issue_and_void_endpoints():
+def test_invoice_issue_and_void_endpoints(staff_client):
     member = create_member("Invoice Person", "invoice@example.org")
     invoice = create_invoice(member, "INV-API-001", 5000, status=Invoice.Status.DRAFT)
-    client = DjangoClient()
 
-    issue_response = client.post(f"/api/invoices/{invoice.pk}/issue", content_type="application/json")
-    void_response = client.post(f"/api/invoices/{invoice.pk}/void", content_type="application/json")
+    issue_response = staff_client.post(f"/api/invoices/{invoice.pk}/issue", content_type="application/json")
+    void_response = staff_client.post(f"/api/invoices/{invoice.pk}/void", content_type="application/json")
 
     assert issue_response.status_code == 200
     assert void_response.status_code == 200
@@ -66,7 +64,7 @@ def test_invoice_issue_and_void_endpoints():
 
 
 @pytest.mark.django_db
-def test_financial_report_endpoint_returns_summary_dues_donations_expenses_and_snapshot():
+def test_financial_report_endpoint_returns_summary_dues_donations_expenses_and_snapshot(staff_client):
     paid_member = create_member("Paid Member", "paid@example.org")
     unpaid_member = create_member("Unpaid Member", "unpaid@example.org")
     paid_invoice = create_invoice(paid_member, "INV-RPT-001", 5000, status=Invoice.Status.ISSUED)
@@ -100,7 +98,7 @@ def test_financial_report_endpoint_returns_summary_dues_donations_expenses_and_s
         review_status=Expense.ReviewStatus.RECONCILED,
     )
 
-    response = DjangoClient().get("/api/reports/financial?from=2026-04-01&to=2026-04-30")
+    response = staff_client.get("/api/reports/financial?from=2026-04-01&to=2026-04-30")
 
     assert response.status_code == 200
     payload = response.json()

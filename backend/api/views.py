@@ -16,6 +16,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api.permissions import UserOrAccessAgentKeyPermission
 from api.serializers import (
     AccessEventSerializer,
     ClientSerializer,
@@ -221,6 +222,8 @@ class EveryOrgWebhookView(View):
 
 
 class AllowlistView(APIView):
+    permission_classes = [UserOrAccessAgentKeyPermission]
+
     def get(self, request):
         etag = request.query_params.get("v")
         latest = AccessAllowlistSnapshot.objects.order_by("-generated_at", "-id").first()
@@ -238,6 +241,8 @@ class AllowlistView(APIView):
 
 
 class MemberEntitlementView(APIView):
+    permission_classes = [UserOrAccessAgentKeyPermission]
+
     def get(self, request, member_id: int):
         member = Member.objects.select_related("client").get(pk=member_id)
         return Response(
@@ -251,6 +256,8 @@ class MemberEntitlementView(APIView):
 
 
 class AccessEventView(APIView):
+    permission_classes = [UserOrAccessAgentKeyPermission]
+
     def post(self, request):
         serializer = AccessEventSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

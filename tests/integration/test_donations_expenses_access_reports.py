@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 
 import pytest
-from django.test import Client as DjangoClient
 
 from apps.billing.models import Invoice
 from apps.expenses.models import ExpenseCategorizationRule, ExpenseCategory, ImportedBankTransaction
@@ -27,10 +26,8 @@ def create_member(name: str, email: str, *, door_access_enabled: bool = False) -
 
 
 @pytest.mark.django_db
-def test_donations_manual_create_and_list_api():
-    client = DjangoClient()
-
-    create_response = client.post(
+def test_donations_manual_create_and_list_api(staff_client):
+    create_response = staff_client.post(
         "/api/donations/manual",
         data={
             "external_charge_id": "manual-donation-001",
@@ -46,7 +43,7 @@ def test_donations_manual_create_and_list_api():
         },
         content_type="application/json",
     )
-    list_response = client.get("/api/donations")
+    list_response = staff_client.get("/api/donations")
 
     assert create_response.status_code == 201
     assert list_response.status_code == 200
@@ -54,9 +51,8 @@ def test_donations_manual_create_and_list_api():
 
 
 @pytest.mark.django_db
-def test_expense_csv_import_categorize_and_import_batch_listing():
-    client = DjangoClient()
-    source_response = client.post(
+def test_expense_csv_import_categorize_and_import_batch_listing(staff_client):
+    source_response = staff_client.post(
         "/api/expenses/import/csv",
         data={
             "source_name": "Checking CSV",
@@ -70,12 +66,12 @@ def test_expense_csv_import_categorize_and_import_batch_listing():
     payload = source_response.json()
     imported_transaction_id = payload["transactions"][0]["id"]
 
-    categorize_response = client.post(
+    categorize_response = staff_client.post(
         f"/api/expenses/{imported_transaction_id}/categorize",
         data={"category_code": "INTERNET", "category_name": "Internet"},
         content_type="application/json",
     )
-    batches_response = client.get("/api/expenses/import-batches")
+    batches_response = staff_client.get("/api/expenses/import-batches")
 
     assert categorize_response.status_code == 200
     assert batches_response.status_code == 200
@@ -83,16 +79,15 @@ def test_expense_csv_import_categorize_and_import_batch_listing():
 
 
 @pytest.mark.django_db
-def test_expense_csv_import_marks_duplicate_rows_on_repeat_import():
-    client = DjangoClient()
+def test_expense_csv_import_marks_duplicate_rows_on_repeat_import(staff_client):
     payload = {
         "source_name": "Checking CSV",
         "parser_key": "generic_csv",
         "csv_content": "posted_on,description,amount_cents,direction,currency\n2026-04-08,Internet Provider,800,DEBIT,usd\n",
     }
 
-    first_response = client.post("/api/expenses/import/csv", data=payload, content_type="application/json")
-    second_response = client.post("/api/expenses/import/csv", data=payload, content_type="application/json")
+    first_response = staff_client.post("/api/expenses/import/csv", data=payload, content_type="application/json")
+    second_response = staff_client.post("/api/expenses/import/csv", data=payload, content_type="application/json")
 
     assert first_response.status_code == 201
     assert second_response.status_code == 201
@@ -101,9 +96,8 @@ def test_expense_csv_import_marks_duplicate_rows_on_repeat_import():
 
 
 @pytest.mark.django_db
-def test_expense_categorize_reassigns_existing_expense_category():
-    client = DjangoClient()
-    import_response = client.post(
+def test_expense_categorize_reassigns_existing_expense_category(staff_client):
+    import_response = staff_client.post(
         "/api/expenses/import/csv",
         data={
             "source_name": "Checking CSV",
@@ -114,12 +108,12 @@ def test_expense_categorize_reassigns_existing_expense_category():
     )
     transaction_id = import_response.json()["transactions"][0]["id"]
 
-    first_categorize = client.post(
+    first_categorize = staff_client.post(
         f"/api/expenses/{transaction_id}/categorize",
         data={"category_code": "INTERNET", "category_name": "Internet"},
         content_type="application/json",
     )
-    second_categorize = client.post(
+    second_categorize = staff_client.post(
         f"/api/expenses/{transaction_id}/categorize",
         data={"category_code": "UTIL", "category_name": "Utilities"},
         content_type="application/json",
@@ -131,7 +125,7 @@ def test_expense_categorize_reassigns_existing_expense_category():
 
 
 @pytest.mark.django_db
-def test_expense_csv_import_auto_categorizes_from_rules():
+def test_expense_csv_import_auto_categorizes_from_rules(staff_client):
     category = ExpenseCategory.objects.create(code="INTERNET", name="Internet")
     ExpenseCategorizationRule.objects.create(
         priority=1,
@@ -139,9 +133,7 @@ def test_expense_csv_import_auto_categorizes_from_rules():
         pattern="internet",
         expense_category=category,
     )
-    client = DjangoClient()
-
-    response = client.post(
+    response = staff_client.post(
         "/api/expenses/import/csv",
         data={
             "source_name": "Checking CSV",
@@ -159,7 +151,7 @@ def test_expense_csv_import_auto_categorizes_from_rules():
 
 
 @pytest.mark.django_db
-def test_member_balances_and_ar_aging_reports():
+def test_member_balances_and_ar_aging_reports(staff_client):
     member = create_member("Aging Member", "aging@example.org")
     Invoice.objects.create(
         client=member.client,
@@ -175,9 +167,8 @@ def test_member_balances_and_ar_aging_reports():
         external_processor=Invoice.ExternalProcessor.NONE,
     )
 
-    client = DjangoClient()
-    balances_response = client.get("/api/reports/member-balances")
-    aging_response = client.get("/api/reports/ar-aging")
+    balances_response = staff_client.get("/api/reports/member-balances")
+    aging_response = staff_client.get("/api/reports/ar-aging")
 
     assert balances_response.status_code == 200
     assert aging_response.status_code == 200
@@ -186,11 +177,11 @@ def test_member_balances_and_ar_aging_reports():
 
 
 @pytest.mark.django_db
-def test_allowlist_endpoint_returns_door_access_flags():
+def test_allowlist_endpoint_returns_door_access_flags(access_agent_client):
     create_member("Door Enabled", "door1@example.org", door_access_enabled=True)
     create_member("Door Disabled", "door2@example.org", door_access_enabled=False)
 
-    response = DjangoClient().get("/api/access/allowlist/")
+    response = access_agent_client.get("/api/access/allowlist/")
 
     assert response.status_code == 200
     entries = response.json()["payload"]["members"]

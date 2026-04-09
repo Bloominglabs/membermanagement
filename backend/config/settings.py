@@ -110,6 +110,13 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": (
         "rest_framework.parsers.JSONParser",
     ),
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework.authentication.BasicAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
 }
 
 MEMBER_DUES_FULL_RATE_CENTS = int(os.getenv("MEMBER_DUES_FULL_RATE_CENTS", "5000"))
@@ -124,6 +131,7 @@ FRONTEND_SUCCESS_URL = os.getenv("FRONTEND_SUCCESS_URL", "https://example.org/pa
 FRONTEND_CANCEL_URL = os.getenv("FRONTEND_CANCEL_URL", "https://example.org/payments/cancel")
 
 ACCESS_ALLOWLIST_SECRET = os.getenv("ACCESS_ALLOWLIST_SECRET", SECRET_KEY)
+ACCESS_AGENT_API_KEY = os.getenv("ACCESS_AGENT_API_KEY", SECRET_KEY)
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)

@@ -11,6 +11,7 @@ from pathlib import Path
 
 DB_PATH = Path(os.getenv("ACCESS_AGENT_DB", "/tmp/access-agent.sqlite3"))
 ALLOWLIST_URL = os.getenv("ACCESS_ALLOWLIST_URL", "http://localhost:8000/api/access/allowlist/")
+ACCESS_AGENT_API_KEY = os.getenv("ACCESS_AGENT_API_KEY", "")
 POLL_SECONDS = int(os.getenv("ACCESS_AGENT_POLL_SECONDS", "300"))
 
 
@@ -44,7 +45,10 @@ def fetch_snapshot(etag: str | None) -> dict | None:
     if etag:
         separator = "&" if "?" in url else "?"
         url = f"{url}{separator}v={etag}"
-    request = urllib.request.Request(url, headers={"Accept": "application/json"})
+    headers = {"Accept": "application/json"}
+    if ACCESS_AGENT_API_KEY:
+        headers["X-Access-Agent-Key"] = ACCESS_AGENT_API_KEY
+    request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
             if response.status == 304:
