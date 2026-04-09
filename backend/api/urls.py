@@ -10,12 +10,14 @@ from api.views import (
     ClientViewSet,
     DonationViewSet,
     EveryOrgWebhookView,
+    ExpenseCategorizationRuleViewSet,
     ExpenseCategorizeView,
     ExpenseImportBatchListView,
     ExpenseImportCsvView,
     FinancialReportCsvView,
     FinancialReportView,
     InvoiceViewSet,
+    InvoiceScheduleViewSet,
     ManualPaymentEntryView,
     MemberEntitlementView,
     MemberBalancesReportView,
@@ -30,7 +32,9 @@ from api.views import (
 router = DefaultRouter()
 router.register("clients", ClientViewSet, basename="clients")
 router.register("donations", DonationViewSet, basename="donations")
+router.register("expense-categorization-rules", ExpenseCategorizationRuleViewSet, basename="expense-categorization-rules")
 router.register("invoices", InvoiceViewSet, basename="invoices")
+router.register("invoice-schedules", InvoiceScheduleViewSet, basename="invoice-schedules")
 router.register("members", MemberViewSet, basename="members")
 router.register("payments", PaymentViewSet, basename="payments")
 

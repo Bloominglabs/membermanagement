@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.members.models import Client, Member
+from apps.members.models import Client, ClientAlias, Member, MembershipTerm
 
 
 @admin.register(Client)
@@ -14,3 +14,7 @@ class MemberAdmin(admin.ModelAdmin):
     list_display = ("id", "client", "membership_class", "status", "autopay_enabled")
     list_filter = ("membership_class", "status", "autopay_enabled")
     search_fields = ("client__first_name", "client__last_name", "client__email")
+
+
+admin.site.register(ClientAlias)
+admin.site.register(MembershipTerm)

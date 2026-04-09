@@ -21,8 +21,10 @@ from api.serializers import (
     AccessEventSerializer,
     ClientSerializer,
     DonationSerializer,
+    ExpenseCategorizationRuleSerializer,
     ExpenseCategorizeSerializer,
     ExpenseImportSerializer,
+    InvoiceScheduleSerializer,
     ImportedBankTransactionSerializer,
     InvoiceSerializer,
     ManualPaymentSerializer,
@@ -37,7 +39,7 @@ from api.serializers import (
 from apps.access.models import AccessAllowlistSnapshot
 from apps.access.services import build_allowlist_snapshot, record_access_event
 from apps.audit.models import AuditLog
-from apps.billing.models import Invoice, Payment, ProcessorChoices, WebhookEvent
+from apps.billing.models import Invoice, InvoiceSchedule, Payment, ProcessorChoices, WebhookEvent
 from apps.billing.services import (
     allocate_payment_fifo,
     create_checkout_session,
@@ -51,7 +53,14 @@ from apps.billing.services import (
 from apps.common.utils import json_ready
 from apps.donations.models import Donation
 from apps.donations.services import process_everyorg_webhook
-from apps.expenses.models import BankImportSource, Expense, ExpenseCategory, ExpenseImportBatch, ImportedBankTransaction
+from apps.expenses.models import (
+    BankImportSource,
+    Expense,
+    ExpenseCategorizationRule,
+    ExpenseCategory,
+    ExpenseImportBatch,
+    ImportedBankTransaction,
+)
 from apps.expenses.services import auto_categorize_imported_transaction, categorize_imported_transaction
 from apps.ledger.services import render_financial_report
 from apps.members.models import Client, Member
@@ -154,10 +163,20 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({"allocated_cents": result.allocated_cents, "invoice_numbers": result.invoice_numbers})
 
 
+class InvoiceScheduleViewSet(viewsets.ModelViewSet):
+    queryset = InvoiceSchedule.objects.select_related("client", "member").all().order_by("id")
+    serializer_class = InvoiceScheduleSerializer
+
+
 class DonationViewSet(viewsets.ModelViewSet):
     queryset = Donation.objects.all().order_by("-donation_date", "-id")
     serializer_class = DonationSerializer
     http_method_names = ["get", "post"]
+
+
+class ExpenseCategorizationRuleViewSet(viewsets.ModelViewSet):
+    queryset = ExpenseCategorizationRule.objects.select_related("expense_category").all().order_by("priority", "id")
+    serializer_class = ExpenseCategorizationRuleSerializer
 
 
 class StripeCheckoutSessionView(APIView):

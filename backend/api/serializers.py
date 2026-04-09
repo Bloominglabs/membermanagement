@@ -6,10 +6,10 @@ from rest_framework import serializers
 
 from apps.access.models import AccessEvent
 from apps.audit.services import log_audit_event
-from apps.billing.models import Allocation, Invoice, InvoiceLine, Payment
+from apps.billing.models import Allocation, Invoice, InvoiceLine, InvoiceSchedule, Payment
 from apps.billing.services import calculate_due_date
 from apps.donations.models import Donation
-from apps.expenses.models import Expense, ExpenseCategory, ImportedBankTransaction
+from apps.expenses.models import Expense, ExpenseCategorizationRule, ExpenseCategory, ImportedBankTransaction
 from apps.members.models import Client, Member
 from apps.members.services import (
     MemberBalance,
@@ -292,6 +292,26 @@ class PaymentAllocationSerializer(serializers.Serializer):
     invoice_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False)
 
 
+class InvoiceScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InvoiceSchedule
+        fields = [
+            "id",
+            "client",
+            "member",
+            "invoice_type",
+            "description",
+            "frequency",
+            "generation_day",
+            "due_day",
+            "due_offset_days",
+            "amount_cents",
+            "active",
+            "last_issued_on",
+        ]
+        read_only_fields = ["id", "last_issued_on"]
+
+
 class DonationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Donation
@@ -321,6 +341,20 @@ class ExpenseImportSerializer(serializers.Serializer):
 class ExpenseCategorizeSerializer(serializers.Serializer):
     category_code = serializers.CharField()
     category_name = serializers.CharField()
+
+
+class ExpenseCategorizationRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExpenseCategorizationRule
+        fields = [
+            "id",
+            "priority",
+            "match_type",
+            "pattern",
+            "expense_category",
+            "vendor_name",
+            "active",
+        ]
 
 
 class ImportedBankTransactionSerializer(serializers.ModelSerializer):
