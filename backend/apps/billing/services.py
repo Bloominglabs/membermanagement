@@ -283,6 +283,51 @@ def generate_due_scheduled_invoices(run_date: date | None = None) -> list[Invoic
 
 
 @transaction.atomic
+def create_one_off_invoice(
+    *,
+    member: Member,
+    invoice_number: str,
+    description: str,
+    amount_cents: int,
+    issue_date: date | None = None,
+    due_date: date | None = None,
+    due_day: int | None = None,
+    due_offset_days: int | None = None,
+) -> Invoice:
+    issue_date = issue_date or timezone.localdate()
+    resolved_due_date = due_date or calculate_due_date(issue_date, due_day=due_day, due_offset_days=due_offset_days)
+    invoice = Invoice.objects.create(
+        client=member.client,
+        member=member,
+        invoice_type=Invoice.InvoiceType.ONE_OFF,
+        invoice_number=invoice_number,
+        issue_date=issue_date,
+        due_date=resolved_due_date,
+        service_period_start=issue_date,
+        service_period_end=resolved_due_date,
+        status=Invoice.Status.ISSUED,
+        currency=settings.STRIPE_PRICE_CURRENCY,
+        total_cents=amount_cents,
+        description=description,
+        notes=description,
+        external_processor=Invoice.ExternalProcessor.NONE,
+        metadata={"kind": "staff_one_off"},
+    )
+    InvoiceLine.objects.create(
+        invoice=invoice,
+        line_type=InvoiceLine.LineType.OTHER,
+        description=description,
+        quantity=1,
+        unit_price_cents=amount_cents,
+        line_total_cents=amount_cents,
+        amount_cents=amount_cents,
+        service_period_start=issue_date,
+        service_period_end=resolved_due_date,
+    )
+    return invoice
+
+
+@transaction.atomic
 def monthly_dues_close(service_month: date | None = None) -> list[Invoice]:
     invoices: list[Invoice] = []
     members = Member.objects.filter(status__in=[Member.Status.ACTIVE, Member.Status.PAST_DUE]).select_related("client")
@@ -622,3 +667,30 @@ def _receivable_balance_as_of(as_of: date) -> int:
         ).aggregate(total=Coalesce(Sum("allocated_cents"), 0)).get("total", 0)
         total += max(invoice.total_cents - paid, 0)
     return total
+
+
+def build_ar_aging_report(as_of: date | None = None) -> dict[str, int | dict[str, int]]:
+    as_of = as_of or timezone.localdate()
+    buckets = {"current": 0, "1_30": 0, "31_60": 0, "61_90": 0, "over_90": 0}
+    total = 0
+    for invoice in Invoice.objects.exclude(status=Invoice.Status.VOID):
+        outstanding = max(
+            invoice.total_cents
+            - sum(allocation.allocated_cents for allocation in invoice.allocations.filter(payment__status=Payment.Status.SUCCEEDED)),
+            0,
+        )
+        if outstanding <= 0:
+            continue
+        total += outstanding
+        days_past_due = (as_of - invoice.due_date).days
+        if days_past_due <= 0:
+            buckets["current"] += outstanding
+        elif days_past_due <= 30:
+            buckets["1_30"] += outstanding
+        elif days_past_due <= 60:
+            buckets["31_60"] += outstanding
+        elif days_past_due <= 90:
+            buckets["61_90"] += outstanding
+        else:
+            buckets["over_90"] += outstanding
+    return {"total_receivables_cents": total, "buckets": buckets}

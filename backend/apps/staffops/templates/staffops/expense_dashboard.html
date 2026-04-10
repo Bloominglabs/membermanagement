@@ -1,0 +1,107 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Expenses{% endblock %}
+{% block heading %}Expenses{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Import Expense CSV</h2>
+    <form method="post" action="{% url 'staffops:expense-import' %}">
+        {% csrf_token %}
+        <div class="actions">
+            <div>
+                <label for="source-name">Source Name</label>
+                <input id="source-name" type="text" name="source_name" value="Checking" required>
+            </div>
+            <div>
+                <label for="parser-key">Parser Key</label>
+                <input id="parser-key" type="text" name="parser_key" value="generic_csv" required>
+            </div>
+        </div>
+        <div>
+            <label for="csv-content">CSV Content</label>
+            <textarea id="csv-content" name="csv_content"></textarea>
+        </div>
+        <button type="submit">Import CSV</button>
+    </form>
+</section>
+
+<section>
+    <h2>Recent Import Batches</h2>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Source</th><th>Imported At</th><th>Transactions</th></tr>
+        </thead>
+        <tbody>
+            {% for batch in recent_batches %}
+            <tr>
+                <td>{{ batch.pk }}</td>
+                <td>{{ batch.source.name }}</td>
+                <td>{{ batch.imported_at }}</td>
+                <td>{{ batch.transactions.count }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No import batches yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Uncategorized Transactions</h2>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Description</th><th>Amount</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            {% for transaction in uncategorized_transactions %}
+            <tr>
+                <td>{{ transaction.pk }}</td>
+                <td>{{ transaction.description_raw }}</td>
+                <td>{{ transaction.amount_cents }}</td>
+                <td>
+                    <form method="post" action="{% url 'staffops:expense-categorize' transaction.pk %}" class="actions">
+                        {% csrf_token %}
+                        <div>
+                            <label>Code</label>
+                            <input type="text" name="category_code" required>
+                        </div>
+                        <div>
+                            <label>Name</label>
+                            <input type="text" name="category_name" required>
+                        </div>
+                        <div>
+                            <label><input type="checkbox" name="reconciled"> Reconciled</label>
+                        </div>
+                        <div><button type="submit">Categorize</button></div>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No uncategorized transactions.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Categorized Transactions</h2>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Description</th><th>Category</th><th>Reconciled</th></tr>
+        </thead>
+        <tbody>
+            {% for transaction in categorized_transactions %}
+            <tr>
+                <td>{{ transaction.pk }}</td>
+                <td>{{ transaction.description_raw }}</td>
+                <td>{{ transaction.expense.category.code }}</td>
+                <td>{{ transaction.is_reconciled|yesno:"Yes,No" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No categorized transactions.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

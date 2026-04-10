@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import csv
+import hashlib
 import re
+from io import StringIO
 
 from django.db import transaction
 
-from apps.expenses.models import Expense, ExpenseCategory, ExpenseCategorizationRule, ImportedBankTransaction
+from apps.expenses.models import (
+    BankImportSource,
+    Expense,
+    ExpenseCategory,
+    ExpenseCategorizationRule,
+    ExpenseImportBatch,
+    ImportedBankTransaction,
+)
 
 
 def _matches_vendor(rule: ExpenseCategorizationRule, transaction: ImportedBankTransaction) -> bool:
@@ -91,3 +101,40 @@ def auto_categorize_imported_transaction(transaction_record: ImportedBankTransac
     if not rule:
         return None
     return categorize_imported_transaction(transaction_record, rule.expense_category, reconciled=False)
+
+
+@transaction.atomic
+def import_expense_csv(*, source_name: str, parser_key: str, csv_content: str) -> tuple[ExpenseImportBatch, list[ImportedBankTransaction]]:
+    source, _ = BankImportSource.objects.get_or_create(
+        name=source_name,
+        defaults={"parser_key": parser_key, "is_active": True},
+    )
+    if source.parser_key != parser_key:
+        source.parser_key = parser_key
+        source.save(update_fields=["parser_key"])
+
+    batch = ExpenseImportBatch.objects.create(source=source)
+    transactions: list[ImportedBankTransaction] = []
+    reader = csv.DictReader(StringIO(csv_content))
+    for row in reader:
+        external_hash = hashlib.sha256(
+            f"{row['posted_on']}|{row['description']}|{row['amount_cents']}|{row['direction']}".encode("utf-8")
+        ).hexdigest()
+        transaction_record, created = ImportedBankTransaction.objects.get_or_create(
+            external_hash=external_hash,
+            defaults={
+                "source": source,
+                "import_batch": batch,
+                "posted_on": row["posted_on"],
+                "description_raw": row["description"],
+                "amount_cents": int(row["amount_cents"]),
+                "direction": row["direction"],
+                "currency": row.get("currency", "usd"),
+            },
+        )
+        if not created and not transaction_record.is_duplicate:
+            transaction_record.is_duplicate = True
+            transaction_record.save(update_fields=["is_duplicate"])
+        auto_categorize_imported_transaction(transaction_record)
+        transactions.append(transaction_record)
+    return batch, transactions

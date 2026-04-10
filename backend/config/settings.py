@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "apps.expenses.apps.ExpensesConfig",
     "apps.access.apps.AccessConfig",
     "apps.audit.apps.AuditConfig",
+    "apps.staffops.apps.StaffOpsConfig",
 ]
 
 MIDDLEWARE = [
@@ -141,6 +142,8 @@ STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 STRIPE_PRICE_CURRENCY = os.getenv("STRIPE_PRICE_CURRENCY", "usd")
 FRONTEND_SUCCESS_URL = os.getenv("FRONTEND_SUCCESS_URL", "https://example.org/payments/success")
 FRONTEND_CANCEL_URL = os.getenv("FRONTEND_CANCEL_URL", "https://example.org/payments/cancel")
+EVERYORG_API_KEY = os.getenv("EVERYORG_API_KEY", "")
+EVERYORG_WEBHOOK_TOKEN = os.getenv("EVERYORG_WEBHOOK_TOKEN", EVERYORG_API_KEY)
 
 ACCESS_ALLOWLIST_SECRET = os.getenv("ACCESS_ALLOWLIST_SECRET", SECRET_KEY)
 ACCESS_AGENT_API_KEY = os.getenv("ACCESS_AGENT_API_KEY", SECRET_KEY)

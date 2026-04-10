@@ -20,6 +20,14 @@ app.conf.beat_schedule = {
         "task": "apps.billing.tasks.scheduled_invoice_generation_task",
         "schedule": 3600.0,
     },
+    "dues-autopay-run": {
+        "task": "apps.billing.tasks.dues_autopay_run_task",
+        "schedule": 3600.0,
+    },
+    "stripe-reconciliation-sync": {
+        "task": "apps.billing.tasks.stripe_reconciliation_sync_task",
+        "schedule": 21600.0,
+    },
     "enforcement-run": {
         "task": "apps.members.tasks.enforcement_run_task",
         "schedule": 3600.0,

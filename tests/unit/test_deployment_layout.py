@@ -35,3 +35,12 @@ def test_docs_reference_production_overlay_not_qa_overlay():
     assert "docker-compose.prod.yml" in readme
     assert "docker-compose.prod.yml" in hosting
     assert "docker-compose.qa.yml" not in readme
+
+
+def test_prod_env_example_mentions_everyorg_and_payment_return_urls():
+    env_example = (ROOT / "infra" / "prod.env.example").read_text()
+
+    assert "EVERYORG_API_KEY=" in env_example
+    assert "EVERYORG_WEBHOOK_TOKEN=" in env_example
+    assert "FRONTEND_SUCCESS_URL=https://members.example.org/payments/success" in env_example
+    assert "FRONTEND_CANCEL_URL=https://members.example.org/payments/cancel" in env_example

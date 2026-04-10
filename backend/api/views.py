@@ -5,8 +5,8 @@ import hashlib
 import json
 from dataclasses import asdict
 from datetime import date
-from io import StringIO
 
+from django.conf import settings
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.db import connections
 from django.views import View
@@ -44,6 +44,7 @@ from apps.audit.models import AuditLog
 from apps.billing.models import Invoice, InvoiceSchedule, Payment, ProcessorChoices, WebhookEvent
 from apps.billing.services import (
     allocate_payment_fifo,
+    build_ar_aging_report,
     create_checkout_session,
     create_setup_intent,
     issue_invoice,
@@ -56,14 +57,13 @@ from apps.common.utils import json_ready
 from apps.donations.models import Donation
 from apps.donations.services import process_everyorg_webhook
 from apps.expenses.models import (
-    BankImportSource,
     Expense,
     ExpenseCategorizationRule,
     ExpenseCategory,
     ExpenseImportBatch,
     ImportedBankTransaction,
 )
-from apps.expenses.services import auto_categorize_imported_transaction, categorize_imported_transaction
+from apps.expenses.services import categorize_imported_transaction, import_expense_csv
 from apps.ledger.services import render_financial_report
 from apps.members.models import Client, Member
 from apps.members.services import get_member_balance
@@ -249,6 +249,10 @@ class StripeWebhookView(View):
 @method_decorator(csrf_exempt, name="dispatch")
 class EveryOrgWebhookView(View):
     def post(self, request):
+        configured_token = getattr(settings, "EVERYORG_WEBHOOK_TOKEN", "")
+        request_token = request.GET.get("token") or request.headers.get("X-Everyorg-Webhook-Token", "")
+        if configured_token and request_token != configured_token:
+            return JsonResponse({"detail": "Invalid Every.org webhook token."}, status=403)
         payload = json.loads(request.body.decode("utf-8") or "{}")
         donation = process_everyorg_webhook(payload)
         return JsonResponse({"status": "ok", "donation_id": donation.pk})
@@ -377,30 +381,7 @@ class MemberBalancesReportView(APIView):
 
 class ARAgingReportView(APIView):
     def get(self, request):
-        today = date.today()
-        buckets = {"current": 0, "1_30": 0, "31_60": 0, "61_90": 0, "over_90": 0}
-        total = 0
-        for invoice in Invoice.objects.exclude(status=Invoice.Status.VOID):
-            outstanding = max(
-                invoice.total_cents
-                - sum(allocation.allocated_cents for allocation in invoice.allocations.filter(payment__status=Payment.Status.SUCCEEDED)),
-                0,
-            )
-            if outstanding <= 0:
-                continue
-            total += outstanding
-            days_past_due = (today - invoice.due_date).days
-            if days_past_due <= 0:
-                buckets["current"] += outstanding
-            elif days_past_due <= 30:
-                buckets["1_30"] += outstanding
-            elif days_past_due <= 60:
-                buckets["31_60"] += outstanding
-            elif days_past_due <= 90:
-                buckets["61_90"] += outstanding
-            else:
-                buckets["over_90"] += outstanding
-        return Response({"total_receivables_cents": total, "buckets": buckets})
+        return Response(build_ar_aging_report(as_of=date.today()))
 
 
 class ManualPaymentEntryView(APIView):
@@ -417,34 +398,11 @@ class ExpenseImportCsvView(APIView):
     def post(self, request):
         serializer = ExpenseImportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        source, _ = BankImportSource.objects.get_or_create(
-            name=serializer.validated_data["source_name"],
-            defaults={"parser_key": serializer.validated_data["parser_key"], "is_active": True},
+        batch, transactions = import_expense_csv(
+            source_name=serializer.validated_data["source_name"],
+            parser_key=serializer.validated_data["parser_key"],
+            csv_content=serializer.validated_data["csv_content"],
         )
-        batch = ExpenseImportBatch.objects.create(source=source)
-        reader = csv.DictReader(StringIO(serializer.validated_data["csv_content"]))
-        transactions = []
-        for row in reader:
-            external_hash = hashlib.sha256(
-                f"{row['posted_on']}|{row['description']}|{row['amount_cents']}|{row['direction']}".encode("utf-8")
-            ).hexdigest()
-            transaction, created = ImportedBankTransaction.objects.get_or_create(
-                external_hash=external_hash,
-                defaults={
-                    "source": source,
-                    "import_batch": batch,
-                    "posted_on": row["posted_on"],
-                    "description_raw": row["description"],
-                    "amount_cents": int(row["amount_cents"]),
-                    "direction": row["direction"],
-                    "currency": row.get("currency", "usd"),
-                },
-            )
-            if not created and not transaction.is_duplicate:
-                transaction.is_duplicate = True
-                transaction.save(update_fields=["is_duplicate"])
-            auto_categorize_imported_transaction(transaction)
-            transactions.append(transaction)
         return Response(
             {
                 "batch_id": batch.pk,

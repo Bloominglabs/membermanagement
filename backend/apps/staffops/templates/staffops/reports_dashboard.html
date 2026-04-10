@@ -1,0 +1,73 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Reports{% endblock %}
+{% block heading %}Reports{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Report Range</h2>
+    <form method="get" class="actions">
+        <div>
+            <label for="from-date">From</label>
+            <input id="from-date" type="date" name="from" value="{{ start|date:'Y-m-d' }}">
+        </div>
+        <div>
+            <label for="to-date">To</label>
+            <input id="to-date" type="date" name="to" value="{{ end|date:'Y-m-d' }}">
+        </div>
+        <div><button type="submit">Run Reports</button></div>
+    </form>
+    <p>
+        <a href="{{ financial_export_url|safe }}">Download financial CSV</a> |
+        <a href="{{ member_balances_export_url|safe }}">Download member balances CSV</a>
+    </p>
+</section>
+
+<section>
+    <h2>Financial Report</h2>
+    <div class="grid">
+        <div class="metric"><strong>Earned Dues</strong><br>{{ financial_report.earned_dues_cents }}</div>
+        <div class="metric"><strong>Cash Receipts</strong><br>{{ financial_report.cash_receipts_cents }}</div>
+        <div class="metric"><strong>Donations</strong><br>{{ financial_report.donations_cents }}</div>
+        <div class="metric"><strong>Expenses</strong><br>{{ financial_report.expenses_cents }}</div>
+        <div class="metric"><strong>Outstanding Receivables</strong><br>{{ financial_report.outstanding_receivables_cents }}</div>
+        <div class="metric"><strong>Member Credit</strong><br>{{ financial_report.member_credit_cents }}</div>
+    </div>
+</section>
+
+<section>
+    <h2>Member Balances</h2>
+    <table>
+        <thead>
+            <tr><th>Member</th><th>Status</th><th>Receivable</th><th>Credit</th><th>Arrears Months</th></tr>
+        </thead>
+        <tbody>
+            {% for row in member_balances %}
+            <tr>
+                <td>{{ row.member.client.display_name }}</td>
+                <td>{{ row.member.get_status_display }}</td>
+                <td>{{ row.balance.receivable_cents }}</td>
+                <td>{{ row.balance.credit_cents }}</td>
+                <td>{{ row.balance.arrears_months }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5">No members found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>A/R Aging</h2>
+    <table>
+        <thead>
+            <tr><th>Bucket</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+            {% for label, amount in ar_aging_rows %}
+            <tr><td>{{ label }}</td><td>{{ amount }}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

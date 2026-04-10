@@ -6,3 +6,5 @@ def test_celery_app_is_configured():
 
     assert app.main == "config"
     assert "scheduled-invoice-generation" in app.conf.beat_schedule
+    assert "dues-autopay-run" in app.conf.beat_schedule
+    assert "stripe-reconciliation-sync" in app.conf.beat_schedule

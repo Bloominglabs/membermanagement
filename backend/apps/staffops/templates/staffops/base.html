@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{% block title %}Staff Operations{% endblock %}</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            background: #f5f4ef;
+            color: #1f252c;
+        }
+        header, main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 1.25rem;
+        }
+        nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+        nav a {
+            padding: 0.4rem 0.65rem;
+            background: #ffffff;
+            border: 1px solid #c9c1b4;
+            color: inherit;
+            text-decoration: none;
+        }
+        nav a.active {
+            background: #1f252c;
+            color: #ffffff;
+            border-color: #1f252c;
+        }
+        section {
+            background: #ffffff;
+            border: 1px solid #d7d2c7;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0.75rem;
+        }
+        th, td {
+            border: 1px solid #ddd7cc;
+            padding: 0.45rem 0.55rem;
+            vertical-align: top;
+            text-align: left;
+        }
+        form.inline {
+            display: inline;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+        .metric {
+            background: #fcfbf8;
+            border: 1px solid #ddd7cc;
+            padding: 0.75rem;
+        }
+        .messages {
+            list-style: none;
+            padding: 0;
+        }
+        .messages li {
+            background: #eef5ea;
+            border: 1px solid #c2d4b8;
+            padding: 0.6rem 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+        .muted {
+            color: #5e6a74;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: end;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        input, select, textarea, button {
+            font: inherit;
+            padding: 0.35rem 0.45rem;
+        }
+        textarea {
+            width: 100%;
+            min-height: 9rem;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>{% block heading %}Staff Operations{% endblock %}</h1>
+    <nav>
+        <a href="{% url 'staffops:home' %}" class="{% if active_nav == 'home' %}active{% endif %}">Home</a>
+        <a href="{% url 'staffops:member-list' %}" class="{% if active_nav == 'members' %}active{% endif %}">Members</a>
+        <a href="{% url 'staffops:billing-dashboard' %}" class="{% if active_nav == 'billing' %}active{% endif %}">Billing</a>
+        <a href="{% url 'staffops:donation-list' %}" class="{% if active_nav == 'donations' %}active{% endif %}">Donations</a>
+        <a href="{% url 'staffops:expense-dashboard' %}" class="{% if active_nav == 'expenses' %}active{% endif %}">Expenses</a>
+        <a href="{% url 'staffops:access-dashboard' %}" class="{% if active_nav == 'access' %}active{% endif %}">Access</a>
+        <a href="{% url 'staffops:reports-dashboard' %}" class="{% if active_nav == 'reports' %}active{% endif %}">Reports</a>
+        <a href="{% url 'staffops:audit-timeline' %}" class="{% if active_nav == 'audit' %}active{% endif %}">Audit</a>
+        <a href="/admin/">Admin</a>
+    </nav>
+    {% if messages %}
+    <ul class="messages">
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</header>
+<main>
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

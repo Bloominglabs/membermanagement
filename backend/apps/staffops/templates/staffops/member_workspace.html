@@ -1,0 +1,213 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Member Workspace{% endblock %}
+{% block heading %}Member Workspace{% endblock %}
+
+{% block content %}
+<section>
+    <h2>{{ member.client.display_name }}</h2>
+    <p>
+        Member #: {{ member.member_number|default:"-" }}<br>
+        Status: {{ member.get_status_display }}<br>
+        Class: {{ member.get_membership_class_display }}<br>
+        Email: {{ member.client.email }}<br>
+        Door access: {{ member.door_access_enabled|yesno:"Enabled,Disabled" }}
+    </p>
+    <p>
+        <a href="{{ member_admin_url }}">Open in admin</a> |
+        <a href="{{ client_admin_url }}">Open client record</a>
+    </p>
+</section>
+
+<section>
+    <h2>Balance</h2>
+    <div class="grid">
+        <div class="metric"><strong>Receivable</strong><br>{{ balance.receivable_cents }}</div>
+        <div class="metric"><strong>Credit</strong><br>{{ balance.credit_cents }}</div>
+        <div class="metric"><strong>Arrears Months</strong><br>{{ balance.arrears_months }}</div>
+        <div class="metric"><strong>Next Due</strong><br>{{ balance.next_due_date|default:"-" }}</div>
+    </div>
+</section>
+
+<section>
+    <h2>Record Manual Payment</h2>
+    <form method="post" action="{% url 'staffops:member-manual-payment' member.pk %}" class="actions">
+        {% csrf_token %}
+        <div>
+            <label for="manual-amount">Amount Cents</label>
+            <input id="manual-amount" type="number" name="amount_cents" min="1" required>
+        </div>
+        <div>
+            <label for="manual-source">Source Type</label>
+            <select id="manual-source" name="source_type">
+                {% for value, label in manual_payment_form.fields.source_type.choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="manual-note">Note</label>
+            <input id="manual-note" type="text" name="note">
+        </div>
+        <div><button type="submit">Record Manual Payment</button></div>
+    </form>
+</section>
+
+<section>
+    <h2>Create One-Off Invoice</h2>
+    <form method="post" action="{% url 'staffops:member-one-off-invoice' member.pk %}" class="actions">
+        {% csrf_token %}
+        <div>
+            <label for="invoice-number">Invoice Number</label>
+            <input id="invoice-number" type="text" name="invoice_number" required>
+        </div>
+        <div>
+            <label for="invoice-description">Description</label>
+            <input id="invoice-description" type="text" name="description" required>
+        </div>
+        <div>
+            <label for="invoice-amount">Amount Cents</label>
+            <input id="invoice-amount" type="number" name="amount_cents" min="1" required>
+        </div>
+        <div><button type="submit">Create One-Off Invoice</button></div>
+    </form>
+</section>
+
+<section>
+    <h2>RFID Credentials</h2>
+    <form method="post" action="{% url 'staffops:member-add-rfid' member.pk %}" class="actions">
+        {% csrf_token %}
+        <div>
+            <label for="rfid-uid">UID</label>
+            <input id="rfid-uid" type="text" name="uid" required>
+        </div>
+        <div>
+            <label for="rfid-label">Label</label>
+            <input id="rfid-label" type="text" name="label">
+        </div>
+        <div><button type="submit">Add RFID Credential</button></div>
+    </form>
+    <table>
+        <thead>
+            <tr><th>UID</th><th>Label</th><th>Active</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            {% for credential in credentials %}
+            <tr>
+                <td>{{ credential.uid }}</td>
+                <td>{{ credential.label|default:"-" }}</td>
+                <td>{{ credential.is_active|yesno:"Yes,No" }}</td>
+                <td>
+                    {% if credential.is_active %}
+                    <form method="post" action="{% url 'staffops:member-deactivate-rfid' member.pk credential.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit">Deactivate</button>
+                    </form>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No RFID credentials.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Door Access</h2>
+    <form method="post" action="{% url 'staffops:member-door-access' member.pk %}" class="actions">
+        {% csrf_token %}
+        <div>
+            <label><input type="checkbox" name="door_access_enabled" {% if member.door_access_enabled %}checked{% endif %}> Door access enabled</label>
+        </div>
+        <div><button type="submit">Save Door Access</button></div>
+    </form>
+</section>
+
+<section>
+    <h2>Recent Invoices</h2>
+    <table>
+        <thead>
+            <tr><th>Invoice</th><th>Status</th><th>Due Date</th><th>Total Cents</th></tr>
+        </thead>
+        <tbody>
+            {% for invoice in recent_invoices %}
+            <tr>
+                <td>{{ invoice.invoice_number }}</td>
+                <td>{{ invoice.get_status_display }}</td>
+                <td>{{ invoice.due_date }}</td>
+                <td>{{ invoice.total_cents }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No invoices found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Recent Payments</h2>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Status</th><th>Received</th><th>Amount Cents</th></tr>
+        </thead>
+        <tbody>
+            {% for payment in recent_payments %}
+            <tr>
+                <td>{{ payment.pk }}</td>
+                <td>{{ payment.get_status_display }}</td>
+                <td>{{ payment.received_at }}</td>
+                <td>{{ payment.amount_cents }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No payments found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Invoice Schedules</h2>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Description</th><th>Frequency</th><th>Amount</th><th>Active</th></tr>
+        </thead>
+        <tbody>
+            {% for schedule in invoice_schedules %}
+            <tr>
+                <td>{{ schedule.pk }}</td>
+                <td>{{ schedule.description }}</td>
+                <td>{{ schedule.get_frequency_display }}</td>
+                <td>{{ schedule.amount_cents }}</td>
+                <td>{{ schedule.active|yesno:"Yes,No" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5">No invoice schedules.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Audit History</h2>
+    <table>
+        <thead>
+            <tr><th>Occurred</th><th>Action</th><th>Actor</th><th>Reason</th></tr>
+        </thead>
+        <tbody>
+            {% for entry in recent_audit_entries %}
+            <tr>
+                <td>{{ entry.occurred_at }}</td>
+                <td>{{ entry.action }}</td>
+                <td>{{ entry.actor }}</td>
+                <td>{{ entry.reason|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No audit entries.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

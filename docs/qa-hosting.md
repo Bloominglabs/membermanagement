@@ -4,7 +4,7 @@ Validated on April 9, 2026.
 
 ## Recommendation
 
-Use a single **DigitalOcean Basic Droplet** in a US region for the initial Treasurer-facing production deployment, running the provided Docker Compose stack plus the production overlay in [`infra/docker-compose.prod.yml`](/home/jpt4/constructs/blbs/membermanagement/infra/docker-compose.prod.yml).
+Use a single **DigitalOcean Basic Droplet** in a US region for the initial Treasurer-facing production deployment, running the provided Docker Compose stack plus the production overlay in [`infra/docker-compose.prod.yml`](../infra/docker-compose.prod.yml).
 
 ### Why this is the best fit
 
@@ -69,24 +69,32 @@ That puts the initial baseline at **about $31.20/month** before bandwidth overag
 
 1. Create the Droplet in a US region, Ubuntu LTS image, with backups enabled.
 2. Point the production DNS name such as `members.example.org` at the Droplet.
-3. Copy [`infra/prod.env.example`](/home/jpt4/constructs/blbs/membermanagement/infra/prod.env.example) to a real env file and fill in secrets.
+3. Copy [`infra/prod.env.example`](../infra/prod.env.example) to a real env file and fill in secrets.
 4. Set `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS` to the production hostname.
-5. Create a Django superuser after first boot:
+5. Configure webhooks:
+
+- Stripe webhook: `https://members.example.org/webhooks/stripe/`
+- Every.org webhook: `https://members.example.org/webhooks/everyorg/nonprofit-donation/?token=<EVERYORG_WEBHOOK_TOKEN>`
+
+If `EVERYORG_WEBHOOK_TOKEN` is blank, the app falls back to `EVERYORG_API_KEY`.
+
+6. Create a Django superuser after first boot:
 
 ```bash
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file infra/prod.env.example exec app python manage.py createsuperuser
 ```
 
-6. Start the stack:
+7. Start the stack:
 
 ```bash
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file infra/prod.env.example up -d --build
 ```
 
-7. Verify:
+8. Verify:
 
 - `https://members.example.org/healthz` returns `{"status":"ok"}`
 - Django admin login works
+- the Treasurer can access the staff UI at `https://members.example.org/staff/`
 - the Treasurer can access the browsable API with staff credentials
 
 ## Minimum ops checklist

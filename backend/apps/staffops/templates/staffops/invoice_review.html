@@ -1,0 +1,73 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Invoice Review{% endblock %}
+{% block heading %}Invoice Review{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Filters</h2>
+    <form method="get" class="actions">
+        <div>
+            <label for="status">Status</label>
+            <select id="status" name="status">
+                <option value="">All</option>
+                <option value="DRAFT" {% if status_filter == 'DRAFT' %}selected{% endif %}>Draft</option>
+                <option value="ISSUED" {% if status_filter == 'ISSUED' %}selected{% endif %}>Issued</option>
+                <option value="PARTIALLY_PAID" {% if status_filter == 'PARTIALLY_PAID' %}selected{% endif %}>Partially paid</option>
+                <option value="PAID" {% if status_filter == 'PAID' %}selected{% endif %}>Paid</option>
+                <option value="VOID" {% if status_filter == 'VOID' %}selected{% endif %}>Void</option>
+                <option value="OVERDUE" {% if status_filter == 'OVERDUE' %}selected{% endif %}>Overdue</option>
+            </select>
+        </div>
+        <div>
+            <label for="invoice_type">Type</label>
+            <select id="invoice_type" name="invoice_type">
+                <option value="">All</option>
+                <option value="MEMBER_DUES" {% if invoice_type_filter == 'MEMBER_DUES' %}selected{% endif %}>Member dues</option>
+                <option value="RECURRING_AD_HOC" {% if invoice_type_filter == 'RECURRING_AD_HOC' %}selected{% endif %}>Recurring ad-hoc</option>
+                <option value="ONE_OFF" {% if invoice_type_filter == 'ONE_OFF' %}selected{% endif %}>One-off</option>
+            </select>
+        </div>
+        <div>
+            <label for="query">Query</label>
+            <input id="query" type="text" name="query" value="{{ query }}">
+        </div>
+        <div><button type="submit">Filter Invoices</button></div>
+    </form>
+</section>
+
+<section>
+    <h2>Invoices</h2>
+    <table>
+        <thead>
+            <tr><th>Invoice</th><th>Client</th><th>Status</th><th>Due</th><th>Total</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+            {% for invoice in invoices %}
+            <tr>
+                <td>{{ invoice.invoice_number }}</td>
+                <td>{{ invoice.client.display_name }}</td>
+                <td>{{ invoice.get_status_display }}</td>
+                <td>{{ invoice.due_date }}</td>
+                <td>{{ invoice.total_cents }}</td>
+                <td>
+                    <a href="{% url 'staffops:member-workspace' invoice.member.pk %}">Member</a>
+                    {% if invoice.status != 'VOID' %}
+                    <form method="post" action="{% url 'staffops:invoice-issue' invoice.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit">Issue</button>
+                    </form>
+                    <form method="post" action="{% url 'staffops:invoice-void' invoice.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit">Void</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6">No invoices matched the current filters.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Members{% endblock %}
+{% block heading %}Members{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Search</h2>
+    <form method="get" class="actions">
+        <div>
+            <label for="query">Query</label>
+            <input id="query" type="text" name="query" value="{{ query }}">
+        </div>
+        <div>
+            <label for="status">Status</label>
+            <select id="status" name="status">
+                <option value="">All</option>
+                <option value="APPLICANT" {% if status_filter == 'APPLICANT' %}selected{% endif %}>Applicant</option>
+                <option value="ACTIVE" {% if status_filter == 'ACTIVE' %}selected{% endif %}>Active</option>
+                <option value="PAST_DUE" {% if status_filter == 'PAST_DUE' %}selected{% endif %}>Past due</option>
+                <option value="SUSPENDED" {% if status_filter == 'SUSPENDED' %}selected{% endif %}>Suspended</option>
+                <option value="LEFT" {% if status_filter == 'LEFT' %}selected{% endif %}>Left</option>
+            </select>
+        </div>
+        <div>
+            <label for="membership_class">Class</label>
+            <select id="membership_class" name="membership_class">
+                <option value="">All</option>
+                <option value="FULL" {% if membership_class_filter == 'FULL' %}selected{% endif %}>Full</option>
+                <option value="HARDSHIP" {% if membership_class_filter == 'HARDSHIP' %}selected{% endif %}>Hardship</option>
+            </select>
+        </div>
+        <div>
+            <label for="autopay_enabled">Autopay</label>
+            <select id="autopay_enabled" name="autopay_enabled">
+                <option value="">All</option>
+                <option value="1" {% if autopay_enabled_filter == '1' %}selected{% endif %}>Enabled</option>
+                <option value="0" {% if autopay_enabled_filter == '0' %}selected{% endif %}>Disabled</option>
+            </select>
+        </div>
+        <div>
+            <label for="door_access_enabled">Door access</label>
+            <select id="door_access_enabled" name="door_access_enabled">
+                <option value="">All</option>
+                <option value="1" {% if door_access_enabled_filter == '1' %}selected{% endif %}>Enabled</option>
+                <option value="0" {% if door_access_enabled_filter == '0' %}selected{% endif %}>Disabled</option>
+            </select>
+        </div>
+        <div>
+            <button type="submit">Filter Members</button>
+        </div>
+    </form>
+</section>
+
+<section>
+    <h2>Member Results</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Member #</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Class</th>
+                <th>Receivable</th>
+                <th>Credit</th>
+                <th>Autopay</th>
+                <th>Door Access</th>
+                <th>Workspace</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in member_rows %}
+            <tr>
+                <td>{{ row.member.member_number|default:"-" }}</td>
+                <td>{{ row.member.client.display_name }}</td>
+                <td>{{ row.member.get_status_display }}</td>
+                <td>{{ row.member.get_membership_class_display }}</td>
+                <td>{{ row.balance.receivable_cents }}</td>
+                <td>{{ row.balance.credit_cents }}</td>
+                <td>{{ row.member.autopay_enabled|yesno:"Yes,No" }}</td>
+                <td>{{ row.member.door_access_enabled|yesno:"Yes,No" }}</td>
+                <td><a href="{% url 'staffops:member-workspace' row.member.pk %}">Open</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9">No members matched the current filters.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

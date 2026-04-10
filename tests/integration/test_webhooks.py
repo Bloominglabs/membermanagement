@@ -76,6 +76,21 @@ def test_stripe_webhook_is_idempotent(settings):
 
 
 @pytest.mark.django_db
+def test_everyorg_webhook_rejects_invalid_token_when_configured(settings):
+    settings.EVERYORG_WEBHOOK_TOKEN = "every-token"
+    payload = {"chargeId": "every-bad-token", "amount": 1000}
+
+    response = DjangoClient().post(
+        "/webhooks/everyorg/nonprofit-donation/",
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+    assert Donation.objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_everyorg_webhook_stores_designation_and_allows_anonymous_donor():
     payload = {
         "chargeId": "every-123",
@@ -97,5 +112,32 @@ def test_everyorg_webhook_stores_designation_and_allows_anonymous_donor():
 
     assert response.status_code == 200
     donation = Donation.objects.get(external_charge_id="every-123")
+    assert donation.designation == "Wood Shop"
+    assert donation.donor_email == ""
+
+
+@pytest.mark.django_db
+def test_everyorg_webhook_accepts_configured_token(settings):
+    settings.EVERYORG_WEBHOOK_TOKEN = "every-token"
+    payload = {
+        "chargeId": "every-124",
+        "amount": 1500,
+        "netAmount": 1300,
+        "currency": "usd",
+        "frequency": "one_time",
+        "donationDate": "2026-04-04T00:00:00Z",
+        "paymentMethod": "card",
+        "designation": "Wood Shop",
+        "donor": {"name": "Anonymous"},
+    }
+
+    response = DjangoClient().post(
+        "/webhooks/everyorg/nonprofit-donation/?token=every-token",
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    donation = Donation.objects.get(external_charge_id="every-124")
     assert donation.designation == "Wood Shop"
     assert donation.donor_email == ""

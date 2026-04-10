@@ -1,0 +1,61 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Access{% endblock %}
+{% block heading %}Access Operations{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Allowlist Snapshot</h2>
+    {% if latest_snapshot %}
+    <p>Latest snapshot: <strong>{{ latest_snapshot.etag }}</strong> generated at {{ latest_snapshot.generated_at }}</p>
+    {% else %}
+    <p>No allowlist snapshot has been generated yet.</p>
+    {% endif %}
+    <form method="post" action="{% url 'staffops:refresh-allowlist' %}">
+        {% csrf_token %}
+        <button type="submit">Refresh Allowlist Snapshot</button>
+    </form>
+</section>
+
+<section>
+    <h2>RFID Credentials</h2>
+    <table>
+        <thead>
+            <tr><th>UID</th><th>Member</th><th>Label</th><th>Active</th></tr>
+        </thead>
+        <tbody>
+            {% for credential in credentials %}
+            <tr>
+                <td>{{ credential.uid }}</td>
+                <td>{% if credential.member %}{{ credential.member.client.display_name }}{% else %}-{% endif %}</td>
+                <td>{{ credential.label|default:"-" }}</td>
+                <td>{{ credential.is_active|yesno:"Yes,No" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No credentials found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Recent Access Events</h2>
+    <table>
+        <thead>
+            <tr><th>Occurred</th><th>Member</th><th>Credential</th><th>Result</th></tr>
+        </thead>
+        <tbody>
+            {% for event in access_events %}
+            <tr>
+                <td>{{ event.occurred_at }}</td>
+                <td>{% if event.member %}{{ event.member.client.display_name }}{% else %}-{% endif %}</td>
+                <td>{{ event.credential_uid }}</td>
+                <td>{{ event.result }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No access events found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

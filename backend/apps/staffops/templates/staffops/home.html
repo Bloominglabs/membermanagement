@@ -1,0 +1,43 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Staff Home{% endblock %}
+{% block heading %}Staff Home{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Operations Overview</h2>
+    <div class="grid">
+        <div class="metric"><strong>Active Members</strong><br>{{ active_members_count }}</div>
+        <div class="metric"><strong>Past Due Members</strong><br>{{ past_due_members_count }}</div>
+        <div class="metric"><strong>Suspended Members</strong><br>{{ suspended_members_count }}</div>
+        <div class="metric"><strong>Autopay Members</strong><br>{{ autopay_members_count }}</div>
+        <div class="metric"><strong>Overdue Invoices</strong><br>{{ overdue_invoices_count }}</div>
+        <div class="metric"><strong>Unreconciled Expenses</strong><br>{{ unreconciled_expenses_count }}</div>
+        <div class="metric"><strong>Invalid Webhooks</strong><br>{{ invalid_webhooks_count }}</div>
+        <div class="metric"><strong>Pending Stripe Reconciliation</strong><br>{{ pending_stripe_reconciliation_count }}</div>
+    </div>
+</section>
+
+<section>
+    <h2>Direct Actions</h2>
+    <p>
+        <a href="{% url 'staffops:member-list' %}">Open Member Search</a> |
+        <a href="{% url 'staffops:billing-dashboard' %}">Open Billing Operations</a> |
+        <a href="{% url 'staffops:expense-dashboard' %}">Import Expense CSV</a> |
+        <a href="{% url 'staffops:reports-dashboard' %}">Open Reports</a>
+    </p>
+</section>
+
+<section>
+    <h2>Access Snapshot</h2>
+    {% if latest_allowlist_snapshot %}
+    <p>Latest allowlist snapshot etag: <strong>{{ latest_allowlist_snapshot.etag }}</strong></p>
+    <p class="muted">Generated at {{ latest_allowlist_snapshot.generated_at }}</p>
+    {% else %}
+    <p>No allowlist snapshot has been generated yet.</p>
+    {% endif %}
+    {% if latest_access_event %}
+    <p>Latest access event: {{ latest_access_event.credential_uid }} ({{ latest_access_event.result }})</p>
+    {% endif %}
+</section>
+{% endblock %}

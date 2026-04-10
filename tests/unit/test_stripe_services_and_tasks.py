@@ -157,6 +157,7 @@ def test_task_modules_delegate_to_services(monkeypatch):
 
     monkeypatch.setattr("apps.billing.tasks.monthly_dues_close", lambda: ["a", "b"])
     monkeypatch.setattr("apps.billing.tasks.generate_due_scheduled_invoices", lambda: ["sched"])
+    monkeypatch.setattr("apps.billing.tasks.dues_autopay_run", lambda: [{"member_id": 1}])
     monkeypatch.setattr("apps.billing.tasks.reconcile_unposted_stripe_payments", lambda: 3)
     monkeypatch.setattr("apps.access.tasks.build_allowlist_snapshot", lambda: type("Snap", (), {"etag": "etag123"})())
 
@@ -167,11 +168,17 @@ def test_task_modules_delegate_to_services(monkeypatch):
     monkeypatch.setattr("apps.members.tasks.update_member_status_from_balance", fake_update)
 
     from apps.access.tasks import refresh_allowlist_task
-    from apps.billing.tasks import monthly_dues_close_task, scheduled_invoice_generation_task, stripe_reconciliation_sync_task
+    from apps.billing.tasks import (
+        dues_autopay_run_task,
+        monthly_dues_close_task,
+        scheduled_invoice_generation_task,
+        stripe_reconciliation_sync_task,
+    )
     from apps.members.tasks import enforcement_run_task
 
     assert monthly_dues_close_task() == 2
     assert scheduled_invoice_generation_task() == 1
+    assert dues_autopay_run_task() == 1
     assert stripe_reconciliation_sync_task() == 3
     assert refresh_allowlist_task() == "etag123"
     assert enforcement_run_task() == 0 or enforcement_run_task() >= 0

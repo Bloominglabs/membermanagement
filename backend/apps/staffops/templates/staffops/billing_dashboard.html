@@ -1,0 +1,112 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Billing{% endblock %}
+{% block heading %}Billing Operations{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Billing Overview</h2>
+    <div class="grid">
+        <div class="metric"><strong>Autopay-Enabled Members</strong><br>{{ autopay_members_count }}</div>
+        <div class="metric"><strong>Pending Stripe Reconciliation</strong><br>{{ pending_stripe_reconciliation_count }}</div>
+        <div class="metric"><strong>Overdue Invoices</strong><br>{{ overdue_invoices_count }}</div>
+        <div class="metric"><strong>Active Schedules</strong><br>{{ active_schedule_count }}</div>
+    </div>
+</section>
+
+<section>
+    <h2>Run Billing Actions</h2>
+    <div class="actions">
+        <form method="post" action="{% url 'staffops:billing-run' %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="monthly_dues_close">
+            <button type="submit">Run Monthly Dues Close</button>
+        </form>
+        <form method="post" action="{% url 'staffops:billing-run' %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="scheduled_invoice_generation">
+            <button type="submit">Run Scheduled Invoice Generation</button>
+        </form>
+        <form method="post" action="{% url 'staffops:billing-run' %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="dues_autopay_run">
+            <button type="submit">Run Autopay</button>
+        </form>
+        <form method="post" action="{% url 'staffops:billing-run' %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="enforcement_run">
+            <button type="submit">Run Status Enforcement</button>
+        </form>
+        <form method="post" action="{% url 'staffops:billing-run' %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="stripe_reconciliation_sync">
+            <button type="submit">Run Stripe Reconciliation Check</button>
+        </form>
+    </div>
+</section>
+
+<section>
+    <h2>Recent Invoices</h2>
+    <p><a href="{% url 'staffops:invoice-review' %}">Open Invoice Review</a></p>
+    <table>
+        <thead>
+            <tr><th>Invoice</th><th>Client</th><th>Status</th><th>Total</th></tr>
+        </thead>
+        <tbody>
+            {% for invoice in recent_invoices %}
+            <tr>
+                <td>{{ invoice.invoice_number }}</td>
+                <td>{{ invoice.client.display_name }}</td>
+                <td>{{ invoice.get_status_display }}</td>
+                <td>{{ invoice.total_cents }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No invoices found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Recent Payments</h2>
+    <p><a href="{% url 'staffops:payment-review' %}">Open Payment Review</a></p>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Client</th><th>Status</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+            {% for payment in recent_payments %}
+            <tr>
+                <td>{{ payment.pk }}</td>
+                <td>{{ payment.client.display_name }}</td>
+                <td>{{ payment.get_status_display }}</td>
+                <td>{{ payment.amount_cents }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No payments found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Invoice Schedules</h2>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Description</th><th>Frequency</th><th>Active</th></tr>
+        </thead>
+        <tbody>
+            {% for schedule in invoice_schedules %}
+            <tr>
+                <td>{{ schedule.pk }}</td>
+                <td>{{ schedule.description }}</td>
+                <td>{{ schedule.get_frequency_display }}</td>
+                <td>{{ schedule.active|yesno:"Yes,No" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No schedules found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

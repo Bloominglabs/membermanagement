@@ -1,0 +1,73 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Payment Review{% endblock %}
+{% block heading %}Payment Review{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Filters</h2>
+    <form method="get" class="actions">
+        <div>
+            <label for="status">Status</label>
+            <select id="status" name="status">
+                <option value="">All</option>
+                <option value="PENDING" {% if status_filter == 'PENDING' %}selected{% endif %}>Pending</option>
+                <option value="SUCCEEDED" {% if status_filter == 'SUCCEEDED' %}selected{% endif %}>Succeeded</option>
+                <option value="FAILED" {% if status_filter == 'FAILED' %}selected{% endif %}>Failed</option>
+                <option value="REFUNDED" {% if status_filter == 'REFUNDED' %}selected{% endif %}>Refunded</option>
+                <option value="REVERSED" {% if status_filter == 'REVERSED' %}selected{% endif %}>Reversed</option>
+            </select>
+        </div>
+        <div>
+            <label for="source_type">Source Type</label>
+            <input id="source_type" type="text" name="source_type" value="{{ source_type_filter }}">
+        </div>
+        <div>
+            <label for="processor">Processor</label>
+            <input id="processor" type="text" name="processor" value="{{ processor_filter }}">
+        </div>
+        <div>
+            <label for="unreconciled">Unreconciled Stripe Only</label>
+            <select id="unreconciled" name="unreconciled">
+                <option value="">All</option>
+                <option value="1" {% if unreconciled_filter == '1' %}selected{% endif %}>Yes</option>
+            </select>
+        </div>
+        <div><button type="submit">Filter Payments</button></div>
+    </form>
+</section>
+
+<section>
+    <h2>Payments</h2>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Client</th><th>Status</th><th>Amount</th><th>Allocate</th></tr>
+        </thead>
+        <tbody>
+            {% for row in payment_rows %}
+            <tr>
+                <td>{{ row.payment.pk }}</td>
+                <td>{{ row.payment.client.display_name }}</td>
+                <td>{{ row.payment.get_status_display }}</td>
+                <td>{{ row.payment.amount_cents }}</td>
+                <td>
+                    {% if row.available_invoices %}
+                    <form method="post" action="{% url 'staffops:payment-allocate' row.payment.pk %}">
+                        {% csrf_token %}
+                        {% for invoice in row.available_invoices %}
+                        <label><input type="checkbox" name="invoice_ids" value="{{ invoice.pk }}"> {{ invoice.invoice_number }}</label><br>
+                        {% endfor %}
+                        <button type="submit">Allocate Payment</button>
+                    </form>
+                    {% else %}
+                    No open invoices
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5">No payments matched the current filters.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

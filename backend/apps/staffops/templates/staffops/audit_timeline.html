@@ -1,0 +1,47 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Audit Timeline{% endblock %}
+{% block heading %}Audit Timeline{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Filters</h2>
+    <form method="get" class="actions">
+        <div>
+            <label for="entity-type">Entity Type</label>
+            <input id="entity-type" type="text" name="entity_type" value="{{ filters.data.entity_type }}">
+        </div>
+        <div>
+            <label for="action">Action</label>
+            <input id="action" type="text" name="action" value="{{ filters.data.action }}">
+        </div>
+        <div>
+            <label for="actor">Actor</label>
+            <input id="actor" type="text" name="actor" value="{{ filters.data.actor }}">
+        </div>
+        <div><button type="submit">Filter Audit Log</button></div>
+    </form>
+</section>
+
+<section>
+    <h2>Timeline</h2>
+    <table>
+        <thead>
+            <tr><th>Occurred</th><th>Actor</th><th>Entity</th><th>Action</th><th>Message</th></tr>
+        </thead>
+        <tbody>
+            {% for entry in audit_logs %}
+            <tr>
+                <td>{{ entry.occurred_at }}</td>
+                <td>{{ entry.actor }}</td>
+                <td>{{ entry.entity_type }} {{ entry.entity_id }}</td>
+                <td>{{ entry.action }}</td>
+                <td>{{ entry.message|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5">No audit entries matched the current filters.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
