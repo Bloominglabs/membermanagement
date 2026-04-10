@@ -20,7 +20,7 @@ The repository contained both an older Google Sheets/Apps Script handoff and a n
 - Every.org donation ingestion
 - CSV exports and JSON financial report
 - Management commands and Celery tasks for dues close, scheduled invoice generation, enforcement, reconciliation reporting, and allowlist refresh
-- On-prem polling agent stub for RFID allowlist sync
+- On-prem polling agent stub for RFID allowlist sync, kept separate from the public deployment stack
 
 ## Known gaps
 

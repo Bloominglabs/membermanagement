@@ -1,15 +1,15 @@
-# QA Hosting Recommendation
+# Production Hosting Recommendation
 
 Validated on April 9, 2026.
 
 ## Recommendation
 
-Use a single **DigitalOcean Basic Droplet** in a US region for the Treasurer QA environment, running the provided Docker Compose stack plus the QA overlay in [`infra/docker-compose.qa.yml`](/home/jpt4/constructs/blbs/membermanagement/infra/docker-compose.qa.yml).
+Use a single **DigitalOcean Basic Droplet** in a US region for the initial Treasurer-facing production deployment, running the provided Docker Compose stack plus the production overlay in [`infra/docker-compose.prod.yml`](/home/jpt4/constructs/blbs/membermanagement/infra/docker-compose.prod.yml).
 
-### Why this is the best fit for QA
+### Why this is the best fit
 
 - It preserves the project’s self-hosted, host-portable architecture.
-- A single VM is enough for QA traffic while keeping ops simple.
+- A single VM is enough for initial real-world traffic while keeping ops simple.
 - DigitalOcean gives a straightforward control panel for DNS, backups, and firewall rules.
 - The app already fits well into a Compose-based VM deployment: Django, Postgres, Redis, Celery worker, Celery beat, and Caddy.
 
@@ -26,7 +26,7 @@ This is an inference from the current stack shape, not a quoted provider require
 - Celery beat
 - Caddy reverse proxy
 
-That is enough for Treasurer QA without paying for a larger dedicated box up front. If QA remains light, you could likely step down to 2 GB RAM later, but 4 GB is the safer starting point.
+That is enough for initial production use without paying for a larger dedicated box up front. If real traffic stays light, you could likely step down to 2 GB RAM later, but 4 GB is the safer starting point.
 
 ## Estimated monthly cost
 
@@ -38,12 +38,12 @@ As of April 9, 2026:
 - DigitalOcean Cloud Firewalls are available at **no additional cost**.
 - DigitalOcean Monitoring is a **free, opt-in service**.
 
-Recommended QA setup:
+Recommended initial production setup:
 
 - 1 Basic Droplet, 2 vCPU / 4 GB RAM
 - Daily backups enabled
 
-That puts the QA baseline at **about $31.20/month** before bandwidth overages or optional extras:
+That puts the initial baseline at **about $31.20/month** before bandwidth overages or optional extras:
 
 - `$24.00/month` Droplet
 - `+$7.20/month` daily backups
@@ -61,31 +61,31 @@ That puts the QA baseline at **about $31.20/month** before bandwidth overages or
 
 ### Public endpoints
 
-- `https://members-qa.example.org/admin/`
-- `https://members-qa.example.org/api/`
-- `https://members-qa.example.org/healthz`
+- `https://members.example.org/admin/`
+- `https://members.example.org/api/`
+- `https://members.example.org/healthz`
 
 ## Rollout steps
 
 1. Create the Droplet in a US region, Ubuntu LTS image, with backups enabled.
-2. Point a QA DNS name such as `members-qa.example.org` at the Droplet.
-3. Copy [`infra/qa.env.example`](/home/jpt4/constructs/blbs/membermanagement/infra/qa.env.example) to a real env file and fill in secrets.
-4. Set `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS` to the QA hostname.
+2. Point the production DNS name such as `members.example.org` at the Droplet.
+3. Copy [`infra/prod.env.example`](/home/jpt4/constructs/blbs/membermanagement/infra/prod.env.example) to a real env file and fill in secrets.
+4. Set `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS` to the production hostname.
 5. Create a Django superuser after first boot:
 
 ```bash
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.qa.yml --env-file infra/qa.env.example exec app python manage.py createsuperuser
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file infra/prod.env.example exec app python manage.py createsuperuser
 ```
 
 6. Start the stack:
 
 ```bash
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.qa.yml --env-file infra/qa.env.example up -d --build
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --env-file infra/prod.env.example up -d --build
 ```
 
 7. Verify:
 
-- `https://members-qa.example.org/healthz` returns `{"status":"ok"}`
+- `https://members.example.org/healthz` returns `{"status":"ok"}`
 - Django admin login works
 - the Treasurer can access the browsable API with staff credentials
 
@@ -94,8 +94,8 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.qa.yml --env-
 - Restrict inbound traffic with a cloud firewall to `80`, `443`, and `22`.
 - Enable automated backups.
 - Store the env file outside the repo checkout.
-- Create a separate Treasurer QA account instead of sharing the superuser.
-- Keep Stripe and Every.org pointed at QA/test credentials until acceptance is complete.
+- Create a separate Treasurer staff account instead of sharing the superuser.
+- Use Stripe and Every.org test credentials until acceptance is complete, then swap only the env values and restart the stack.
 
 ## Sources
 

@@ -1,0 +1,49 @@
+version: "3.9"
+
+x-prod-env: &prod-env
+  DJANGO_DEBUG: "0"
+  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS}"
+  DJANGO_CSRF_TRUSTED_ORIGINS: "${DJANGO_CSRF_TRUSTED_ORIGINS}"
+  DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY}"
+  DJANGO_SECURE_SSL_REDIRECT: "1"
+  DJANGO_SESSION_COOKIE_SECURE: "1"
+  DJANGO_CSRF_COOKIE_SECURE: "1"
+  ACCESS_AGENT_API_KEY: "${ACCESS_AGENT_API_KEY}"
+  ACCESS_ALLOWLIST_SECRET: "${ACCESS_ALLOWLIST_SECRET}"
+  STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
+  STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
+  FRONTEND_SUCCESS_URL: "${FRONTEND_SUCCESS_URL}"
+  FRONTEND_CANCEL_URL: "${FRONTEND_CANCEL_URL}"
+
+services:
+  app:
+    environment:
+      <<: *prod-env
+
+  worker:
+    environment:
+      <<: *prod-env
+
+  scheduler:
+    environment:
+      <<: *prod-env
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      DOMAIN: "${DOMAIN}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - static_data:/srv/static:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

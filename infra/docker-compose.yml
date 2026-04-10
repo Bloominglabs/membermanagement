@@ -1,53 +1,55 @@
 version: "3.9"
 
+x-app-env: &app-env
+  POSTGRES_DB: ${POSTGRES_DB:-membermanagement}
+  POSTGRES_USER: ${POSTGRES_USER:-membermanagement}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-membermanagement}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/0
+
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: membermanagement
-      POSTGRES_USER: membermanagement
-      POSTGRES_PASSWORD: membermanagement
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-membermanagement}
+      POSTGRES_USER: ${POSTGRES_USER:-membermanagement}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-membermanagement}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
 
   app:
     build:
       context: ..
       dockerfile: infra/Dockerfile
+    restart: unless-stopped
     environment:
-      DJANGO_DEBUG: "1"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
-      POSTGRES_DB: membermanagement
-      POSTGRES_USER: membermanagement
-      POSTGRES_PASSWORD: membermanagement
-      POSTGRES_HOST: db
-      POSTGRES_PORT: "5432"
+      <<: *app-env
     depends_on:
       - db
-    ports:
-      - "8000:8000"
+      - redis
+    expose:
+      - "8000"
+    volumes:
+      - static_data:/app/backend/staticfiles
     command: >
       sh -c "python manage.py migrate &&
-             python manage.py runserver 0.0.0.0:8000"
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile - --error-logfile -"
 
   scheduler:
     build:
       context: ..
       dockerfile: infra/Dockerfile
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: membermanagement
-      POSTGRES_USER: membermanagement
-      POSTGRES_PASSWORD: membermanagement
-      POSTGRES_HOST: db
-      POSTGRES_PORT: "5432"
-      CELERY_BROKER_URL: redis://redis:6379/0
+      <<: *app-env
     depends_on:
       - db
       - redis
@@ -57,32 +59,14 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: membermanagement
-      POSTGRES_USER: membermanagement
-      POSTGRES_PASSWORD: membermanagement
-      POSTGRES_HOST: db
-      POSTGRES_PORT: "5432"
-      CELERY_BROKER_URL: redis://redis:6379/0
+      <<: *app-env
     depends_on:
       - db
       - redis
     command: ["celery", "-A", "config", "worker", "-l", "info"]
 
-  access-agent:
-    build:
-      context: ..
-      dockerfile: infra/Dockerfile
-    environment:
-      ACCESS_ALLOWLIST_URL: http://app:8000/api/access/allowlist/
-      ACCESS_AGENT_DB: /data/access-agent.sqlite3
-      ACCESS_AGENT_POLL_SECONDS: "300"
-    depends_on:
-      - app
-    command: ["python", "/app/onprem/access_agent/main.py"]
-    volumes:
-      - access_agent_data:/data
-
 volumes:
   postgres_data:
-  access_agent_data:
+  static_data:

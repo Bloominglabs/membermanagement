@@ -20,9 +20,11 @@ Self-hosted Django/Postgres membership, billing, donations, reporting, and RFID 
 3. Run `PYTHONPATH=.pkg:backend python3 backend/manage.py runserver`
 4. Run tests with `PYTHONPATH=.pkg:backend python3 -m pytest -q`
 
-## QA deploy
+## Deployment
 
-For a Treasurer-facing QA environment, use the production-leaning Compose overlay in [`infra/docker-compose.qa.yml`](/home/jpt4/constructs/blbs/membermanagement/infra/docker-compose.qa.yml) with the sample environment file [`infra/qa.env.example`](/home/jpt4/constructs/blbs/membermanagement/infra/qa.env.example). The deployment recommendation and exact rollout steps are in [`docs/qa-hosting.md`](/home/jpt4/constructs/blbs/membermanagement/docs/qa-hosting.md).
+For local development, run the core stack plus [`infra/docker-compose.dev.yml`](/home/jpt4/constructs/blbs/membermanagement/infra/docker-compose.dev.yml).
+
+For the actual Treasurer-facing deployment, run the core stack plus [`infra/docker-compose.prod.yml`](/home/jpt4/constructs/blbs/membermanagement/infra/docker-compose.prod.yml) with [`infra/prod.env.example`](/home/jpt4/constructs/blbs/membermanagement/infra/prod.env.example) as the template for real secrets. The deployment recommendation and rollout steps are in [`docs/qa-hosting.md`](/home/jpt4/constructs/blbs/membermanagement/docs/qa-hosting.md).
 
 ## Key assumptions
 

@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  db:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  app:
+    environment:
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1"
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+
+  access-agent:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    depends_on:
+      - app
+    environment:
+      ACCESS_ALLOWLIST_URL: http://app:8000/api/access/allowlist/
+      ACCESS_AGENT_DB: /data/access-agent.sqlite3
+      ACCESS_AGENT_POLL_SECONDS: "300"
+      ACCESS_AGENT_API_KEY: "${ACCESS_AGENT_API_KEY:-dev-access-agent-key}"
+    command: ["python", "/app/onprem/access_agent/main.py"]
+    volumes:
+      - access_agent_data:/data
+
+volumes:
+  access_agent_data:
