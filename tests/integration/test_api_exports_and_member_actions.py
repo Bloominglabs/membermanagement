@@ -56,7 +56,12 @@ def test_member_manual_payment_balance_endpoint_and_csv_exports(staff_client):
 
     manual_payment = staff_client.post(
         f"/api/members/{member.pk}/manual-payment/",
-        data={"amount_cents": 5000, "source_type": "DUES_PAYMENT", "note": "cash box"},
+        data={
+            "amount_cents": 5000,
+            "payment_method": "CASH",
+            "source_type": "DUES_PAYMENT",
+            "note": "cash box",
+        },
         content_type="application/json",
     )
     balance_response = staff_client.get(f"/api/members/{member.pk}/balance/")

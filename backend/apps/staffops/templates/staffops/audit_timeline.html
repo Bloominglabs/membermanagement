@@ -12,12 +12,24 @@
             <input id="entity-type" type="text" name="entity_type" value="{{ filters.data.entity_type }}">
         </div>
         <div>
+            <label for="entity-id">Entity ID</label>
+            <input id="entity-id" type="text" name="entity_id" value="{{ filters.data.entity_id }}">
+        </div>
+        <div>
             <label for="action">Action</label>
             <input id="action" type="text" name="action" value="{{ filters.data.action }}">
         </div>
         <div>
             <label for="actor">Actor</label>
             <input id="actor" type="text" name="actor" value="{{ filters.data.actor }}">
+        </div>
+        <div>
+            <label for="occurred-from">Occurred From</label>
+            <input id="occurred-from" type="date" name="occurred_from" value="{{ filters.data.occurred_from }}">
+        </div>
+        <div>
+            <label for="occurred-to">Occurred To</label>
+            <input id="occurred-to" type="date" name="occurred_to" value="{{ filters.data.occurred_to }}">
         </div>
         <div><button type="submit">Filter Audit Log</button></div>
     </form>
@@ -27,19 +39,25 @@
     <h2>Timeline</h2>
     <table>
         <thead>
-            <tr><th>Occurred</th><th>Actor</th><th>Entity</th><th>Action</th><th>Message</th></tr>
+            <tr><th>Occurred</th><th>Actor</th><th>Entity</th><th>Action</th><th>Change Summary</th><th>Message</th></tr>
         </thead>
         <tbody>
-            {% for entry in audit_logs %}
+            {% for row in audit_rows %}
             <tr>
-                <td>{{ entry.occurred_at }}</td>
-                <td>{{ entry.actor }}</td>
-                <td>{{ entry.entity_type }} {{ entry.entity_id }}</td>
-                <td>{{ entry.action }}</td>
-                <td>{{ entry.message|default:"-" }}</td>
+                <td>{{ row.entry.occurred_at }}</td>
+                <td>{{ row.entry.actor }}</td>
+                <td>
+                    {{ row.entry.entity_type }} {{ row.entry.entity_id }}
+                    {% if row.entity_admin_url %}
+                    <br><a href="{{ row.entity_admin_url }}">Open entity admin</a>
+                    {% endif %}
+                </td>
+                <td>{{ row.entry.action }}</td>
+                <td>{{ row.change_summary }}</td>
+                <td>{{ row.entry.message|default:"-" }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="5">No audit entries matched the current filters.</td></tr>
+            <tr><td colspan="6">No audit entries matched the current filters.</td></tr>
             {% endfor %}
         </tbody>
     </table>

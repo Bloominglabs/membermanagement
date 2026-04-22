@@ -5,9 +5,30 @@
 
 {% block content %}
 <section>
+    <h2>Escape Hatches</h2>
+    <p>
+        <a href="{{ allowlist_api_url }}">Open allowlist API</a> |
+        <a href="{{ access_events_api_url }}">Open access events API</a> |
+        <a href="{{ credential_admin_url }}">Open credential admin</a> |
+        <a href="{{ allowlist_admin_url }}">Open allowlist admin</a> |
+        <a href="{{ access_event_admin_url }}">Open access event admin</a>
+    </p>
+    <p>
+        <a href="{{ credential_audit_url }}">Credential Audit</a> |
+        <a href="{{ allowlist_audit_url }}">Allowlist Audit</a> |
+        <a href="{{ access_event_audit_url }}">Access Event Audit</a>
+    </p>
+</section>
+
+<section>
     <h2>Allowlist Snapshot</h2>
     {% if latest_snapshot %}
     <p>Latest snapshot: <strong>{{ latest_snapshot.etag }}</strong> generated at {{ latest_snapshot.generated_at }}</p>
+    <p>Signature: <code>{{ latest_snapshot.signature }}</code></p>
+    <details>
+        <summary>Inspect Last Exported Payload</summary>
+        <pre>{{ latest_snapshot.payload_json|pprint }}</pre>
+    </details>
     {% else %}
     <p>No allowlist snapshot has been generated yet.</p>
     {% endif %}
@@ -27,7 +48,13 @@
             {% for credential in credentials %}
             <tr>
                 <td>{{ credential.uid }}</td>
-                <td>{% if credential.member %}{{ credential.member.client.display_name }}{% else %}-{% endif %}</td>
+                <td>
+                    {% if credential.member %}
+                    <a href="{% url 'staffops:member-workspace' credential.member.pk %}">{{ credential.member.client.display_name }}</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
                 <td>{{ credential.label|default:"-" }}</td>
                 <td>{{ credential.is_active|yesno:"Yes,No" }}</td>
             </tr>
@@ -48,7 +75,14 @@
             {% for event in access_events %}
             <tr>
                 <td>{{ event.occurred_at }}</td>
-                <td>{% if event.member %}{{ event.member.client.display_name }}{% else %}-{% endif %}</td>
+                <td>
+                    {% if event.member %}
+                    <a href="{% url 'staffops:member-workspace' event.member.pk %}">{{ event.member.client.display_name }}</a>
+                    <br><a href="/api/access/members/{{ event.member.pk }}/entitlement">Entitlement API</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
                 <td>{{ event.credential_uid }}</td>
                 <td>{{ event.result }}</td>
             </tr>

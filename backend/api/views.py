@@ -30,6 +30,7 @@ from api.serializers import (
     ImportedBankTransactionSerializer,
     InvoiceSerializer,
     ManualPaymentSerializer,
+    ManualPaymentEntrySerializer,
     MemberBalanceSerializer,
     MemberSerializer,
     PaymentAllocationSerializer,
@@ -133,6 +134,7 @@ class MemberViewSet(viewsets.ModelViewSet):
         payment = record_manual_payment(
             member=member,
             amount_cents=serializer.validated_data["amount_cents"],
+            payment_method=serializer.validated_data["payment_method"],
             source_type=serializer.validated_data["source_type"],
             note=serializer.validated_data.get("note", ""),
         )
@@ -173,7 +175,10 @@ class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
         invoices = None
         if serializer.validated_data.get("invoice_ids"):
             invoices = list(Invoice.objects.filter(pk__in=serializer.validated_data["invoice_ids"]).order_by("due_date", "id"))
-        result = allocate_payment_fifo(payment, invoices=invoices)
+        try:
+            result = allocate_payment_fifo(payment, invoices=invoices)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"allocated_cents": result.allocated_cents, "invoice_numbers": result.invoice_numbers})
 
 
@@ -386,11 +391,20 @@ class ARAgingReportView(APIView):
 
 class ManualPaymentEntryView(APIView):
     def post(self, request):
-        serializer = PaymentSerializer(data=request.data)
+        serializer = ManualPaymentEntrySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payment = Payment.objects.create(**serializer.validated_data)
-        if payment.status == Payment.Status.SUCCEEDED:
-            allocate_payment_fifo(payment)
+        payment = record_manual_payment(
+            client=serializer.validated_data.get("client"),
+            member=serializer.validated_data.get("member"),
+            received_at=serializer.validated_data.get("received_at"),
+            amount_cents=serializer.validated_data["amount_cents"],
+            currency=serializer.validated_data.get("currency"),
+            payment_method=serializer.validated_data.get("payment_method", Payment.PaymentMethod.OTHER),
+            source_type=serializer.validated_data["source_type"],
+            status=serializer.validated_data.get("status", Payment.Status.SUCCEEDED),
+            note=serializer.validated_data.get("notes", ""),
+            metadata=serializer.validated_data.get("metadata"),
+        )
         return Response(PaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
 
 

@@ -33,7 +33,15 @@ def create_member(
     )
 
 
-def create_invoice(member: Member, invoice_number: str, issue_date: date, due_date: date, total_cents: int) -> Invoice:
+def create_invoice(
+    member: Member,
+    invoice_number: str,
+    issue_date: date,
+    due_date: date,
+    total_cents: int,
+    *,
+    status: str = Invoice.Status.ISSUED,
+) -> Invoice:
     invoice = Invoice.objects.create(
         invoice_number=invoice_number,
         client=member.client,
@@ -43,6 +51,7 @@ def create_invoice(member: Member, invoice_number: str, issue_date: date, due_da
         due_date=due_date,
         service_period_start=issue_date.replace(day=1),
         service_period_end=issue_date.replace(day=28),
+        status=status,
         description=f"Dues for {issue_date:%B %Y}",
         total_cents=total_cents,
         external_processor=Invoice.ExternalProcessor.NONE,

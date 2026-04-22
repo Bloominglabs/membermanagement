@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone as dt_timezone
 import stripe
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -22,7 +22,7 @@ from apps.billing.models import (
     ProcessorPaymentMethod,
     WebhookEvent,
 )
-from apps.members.models import Member
+from apps.members.models import Client, Member
 from apps.members.services import get_member_balance, update_member_status_from_balance
 
 
@@ -111,6 +111,28 @@ def ensure_member_credit_charge_entry(payment: Payment, invoice: Invoice, amount
     )
 
 
+def _default_invoices_for_payment(payment: Payment) -> list[Invoice]:
+    invoices = Invoice.objects.filter(client=payment.client).exclude(
+        status__in=[Invoice.Status.DRAFT, Invoice.Status.VOID]
+    )
+    if payment.member_id:
+        invoices = invoices.filter(Q(member=payment.member) | Q(member__isnull=True))
+    else:
+        invoices = invoices.filter(member__isnull=True)
+    return list(invoices.order_by("due_date", "issue_date", "id"))
+
+
+def _validate_allocatable_invoice(payment: Payment, invoice: Invoice) -> None:
+    if invoice.client_id != payment.client_id:
+        raise ValueError("Payments can only be allocated to invoices for the same client.")
+    if invoice.status == Invoice.Status.DRAFT:
+        raise ValueError("Draft invoices cannot be allocated.")
+    if invoice.status == Invoice.Status.VOID:
+        raise ValueError("Void invoices cannot be allocated.")
+    if payment.member_id and invoice.member_id and invoice.member_id != payment.member_id:
+        raise ValueError("Payments can only be allocated to invoices for the same member or client.")
+
+
 @transaction.atomic
 def allocate_payment_fifo(payment: Payment, invoices: list[Invoice] | None = None) -> AllocationResult:
     if payment.status != Payment.Status.SUCCEEDED:
@@ -122,11 +144,11 @@ def allocate_payment_fifo(payment: Payment, invoices: list[Invoice] | None = Non
         return AllocationResult(allocated_cents=0, invoice_numbers=[])
 
     if invoices is None:
-        invoices = list(
-            Invoice.objects.filter(member=payment.member)
-            .exclude(status=Invoice.Status.VOID)
-            .order_by("due_date", "issue_date", "id")
-        )
+        invoices = _default_invoices_for_payment(payment)
+    else:
+        for invoice in invoices:
+            _validate_allocatable_invoice(payment, invoice)
+        invoices = sorted(invoices, key=lambda invoice: (invoice.due_date, invoice.issue_date, invoice.id))
 
     touched: list[str] = []
     allocated_total = 0
@@ -190,6 +212,7 @@ def create_monthly_dues_invoice(member: Member, service_month: date | None = Non
         from apps.ledger.services import post_dues_invoice
 
         post_dues_invoice(invoice)
+        return invoice
     return sync_invoice_status(invoice)
 
 
@@ -334,7 +357,11 @@ def monthly_dues_close(service_month: date | None = None) -> list[Invoice]:
     for member in members:
         invoice = create_monthly_dues_invoice(member, service_month=service_month)
         invoices.append(invoice)
-        for payment in member.payments.filter(status=Payment.Status.SUCCEEDED).order_by("received_at", "id"):
+        # Monthly close should consume prepaid credit, not guess how to re-route every historical payment.
+        for payment in member.payments.filter(
+            status=Payment.Status.SUCCEEDED,
+            source_type=Payment.SourceType.PREPAYMENT_TOPUP,
+        ).order_by("received_at", "id"):
             if available_payment_balance_cents(payment) > 0:
                 allocate_payment_fifo(payment)
         update_member_status_from_balance(member)
@@ -343,26 +370,43 @@ def monthly_dues_close(service_month: date | None = None) -> list[Invoice]:
 
 @transaction.atomic
 def record_manual_payment(
-    member: Member,
+    member: Member | None,
     amount_cents: int,
+    *,
+    client: Client | None = None,
+    payment_method: str = Payment.PaymentMethod.OTHER,
     source_type: str = Payment.SourceType.OTHER_INCOME,
     note: str = "",
+    currency: str | None = None,
+    received_at: datetime | None = None,
+    status: str = Payment.Status.SUCCEEDED,
+    metadata: dict | None = None,
 ) -> Payment:
-    payment = Payment.objects.create(
-        client=member.client,
-        member=member,
-        amount_cents=amount_cents,
-        currency=settings.STRIPE_PRICE_CURRENCY,
-        source_type=source_type,
-        payment_method=Payment.PaymentMethod.OTHER,
-        status=Payment.Status.SUCCEEDED,
-        notes=note,
-    )
-    allocate_payment_fifo(payment)
-    from apps.ledger.services import post_payment
+    resolved_client = client or (member.client if member else None)
+    if resolved_client is None:
+        raise ValueError("Manual payments require a client or member.")
+    if member and member.client_id != resolved_client.pk:
+        raise ValueError("Manual payments must use the member's client.")
 
-    post_payment(payment)
-    update_member_status_from_balance(member)
+    payment = Payment.objects.create(
+        client=resolved_client,
+        member=member,
+        received_at=received_at or timezone.now(),
+        amount_cents=amount_cents,
+        currency=currency or settings.STRIPE_PRICE_CURRENCY,
+        source_type=source_type,
+        payment_method=payment_method,
+        status=status,
+        notes=note,
+        metadata=metadata or {},
+    )
+    if payment.status == Payment.Status.SUCCEEDED:
+        allocate_payment_fifo(payment)
+        from apps.ledger.services import post_payment
+
+        post_payment(payment)
+        if payment.member:
+            update_member_status_from_balance(payment.member)
     return payment
 
 
@@ -398,7 +442,8 @@ def create_checkout_session(
 
     balance = get_member_balance(member)
     if mode == "pay_balance":
-        amount_cents = balance.receivable_cents
+        # A member should only be asked to pay the receivable that is still uncovered by prior credit.
+        amount_cents = max(balance.receivable_cents - balance.credit_cents, 0)
         source_type = Payment.SourceType.DUES_PAYMENT
     elif mode == "top_up":
         if not amount_cents or amount_cents <= 0:
@@ -439,7 +484,7 @@ def create_checkout_session(
         ],
         mode="payment",
         payment_intent_data={"metadata": metadata},
-        options={"idempotency_key": idempotency_key},
+        idempotency_key=idempotency_key,
     )
     return dict(session)
 
@@ -620,7 +665,7 @@ def dues_autopay_run() -> list[dict]:
                 "source_type": Payment.SourceType.DUES_PAYMENT,
                 "purpose": "autopay",
             },
-            options={"idempotency_key": f"autopay:{member.pk}:{timezone.localdate().isoformat()}:{needed_cents}"},
+            idempotency_key=f"autopay:{member.pk}:{timezone.localdate().isoformat()}:{needed_cents}",
         )
         results.append({"member_id": member.pk, "payment_intent_id": payment_intent.get("id"), "amount_cents": needed_cents})
     return results

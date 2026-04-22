@@ -20,6 +20,13 @@ from apps.members.services import (
     sync_membership_term,
 )
 
+MANUAL_PAYMENT_METHOD_CHOICES = [
+    Payment.PaymentMethod.CASH,
+    Payment.PaymentMethod.CHECK,
+    Payment.PaymentMethod.BANK_TRANSFER,
+    Payment.PaymentMethod.OTHER,
+]
+
 
 class ClientSerializer(serializers.ModelSerializer):
     display_name = serializers.CharField(source="display_name_text", allow_blank=True, required=False)
@@ -166,6 +173,7 @@ class MemberBalanceSerializer(serializers.Serializer):
 
 class ManualPaymentSerializer(serializers.Serializer):
     amount_cents = serializers.IntegerField(min_value=1)
+    payment_method = serializers.ChoiceField(choices=MANUAL_PAYMENT_METHOD_CHOICES, default=Payment.PaymentMethod.OTHER)
     source_type = serializers.ChoiceField(
         choices=[
             "DUES_PAYMENT",
@@ -177,6 +185,39 @@ class ManualPaymentSerializer(serializers.Serializer):
         default="OTHER_INCOME",
     )
     note = serializers.CharField(required=False, allow_blank=True)
+
+
+class ManualPaymentEntrySerializer(serializers.ModelSerializer):
+    currency = serializers.CharField(default="usd", required=False)
+    payment_method = serializers.ChoiceField(choices=MANUAL_PAYMENT_METHOD_CHOICES, default=Payment.PaymentMethod.OTHER)
+    status = serializers.ChoiceField(choices=Payment.Status.choices, default=Payment.Status.SUCCEEDED, required=False)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "client",
+            "member",
+            "received_at",
+            "amount_cents",
+            "currency",
+            "payment_method",
+            "source_type",
+            "status",
+            "notes",
+            "metadata",
+        ]
+        read_only_fields = ["id"]
+
+    def validate(self, attrs: dict) -> dict:
+        member = attrs.get("member")
+        client = attrs.get("client")
+        if member and client and member.client_id != client.pk:
+            raise serializers.ValidationError("Manual payments must use the selected member's client.")
+        if not member and not client:
+            raise serializers.ValidationError("Manual payments require a client or member.")
+        return attrs
 
 
 class StripeCheckoutRequestSerializer(serializers.Serializer):

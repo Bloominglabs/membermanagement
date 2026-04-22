@@ -32,7 +32,52 @@
             <label for="query">Query</label>
             <input id="query" type="text" name="query" value="{{ query }}">
         </div>
+        <div>
+            <label for="due_from">Due From</label>
+            <input id="due_from" type="date" name="due_from" value="{{ due_from_filter }}">
+        </div>
+        <div>
+            <label for="due_to">Due To</label>
+            <input id="due_to" type="date" name="due_to" value="{{ due_to_filter }}">
+        </div>
+        <div>
+            <label for="sort">Sort</label>
+            <select id="sort" name="sort">
+                <option value="due_desc" {% if sort_filter == 'due_desc' %}selected{% endif %}>Due date newest</option>
+                <option value="due_asc" {% if sort_filter == 'due_asc' %}selected{% endif %}>Due date oldest</option>
+                <option value="total_desc" {% if sort_filter == 'total_desc' %}selected{% endif %}>Total high-low</option>
+                <option value="client_asc" {% if sort_filter == 'client_asc' %}selected{% endif %}>Client</option>
+            </select>
+        </div>
         <div><button type="submit">Filter Invoices</button></div>
+    </form>
+    <p><a href="{{ invoices_api_url }}">Open invoice API</a> | <a href="{{ invoice_admin_url }}">Open invoice admin</a></p>
+</section>
+
+<section>
+    <h2>Common Queues</h2>
+    <p>
+        <a href="{{ invoice_queue_urls.overdue }}">Overdue</a> |
+        <a href="{{ invoice_queue_urls.drafts }}">Drafts</a>
+    </p>
+    {% if active_queue %}
+    <p class="muted">Current queue: <strong>{{ active_queue }}</strong></p>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Bulk Actions</h2>
+    <form id="bulk-invoice-form" method="post" action="{% url 'staffops:invoice-bulk-action' %}" class="actions">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ current_url }}">
+        <div>
+            <label for="bulk-action">Action</label>
+            <select id="bulk-action" name="action">
+                <option value="issue">Issue selected invoices</option>
+                <option value="void">Void selected invoices</option>
+            </select>
+        </div>
+        <div><button type="submit">Run Bulk Action</button></div>
     </form>
 </section>
 
@@ -40,18 +85,20 @@
     <h2>Invoices</h2>
     <table>
         <thead>
-            <tr><th>Invoice</th><th>Client</th><th>Status</th><th>Due</th><th>Total</th><th>Actions</th></tr>
+            <tr><th>Select</th><th>Invoice</th><th>Client</th><th>Status</th><th>Due</th><th>Total</th><th>Actions</th></tr>
         </thead>
         <tbody>
             {% for invoice in invoices %}
             <tr>
+                <td><input type="checkbox" name="invoice_ids" value="{{ invoice.pk }}" form="bulk-invoice-form"></td>
                 <td>{{ invoice.invoice_number }}</td>
                 <td>{{ invoice.client.display_name }}</td>
                 <td>{{ invoice.get_status_display }}</td>
                 <td>{{ invoice.due_date }}</td>
                 <td>{{ invoice.total_cents }}</td>
                 <td>
-                    <a href="{% url 'staffops:member-workspace' invoice.member.pk %}">Member</a>
+                    {% if invoice.member %}<a href="{% url 'staffops:member-workspace' invoice.member.pk %}">Member</a>{% endif %}
+                    <a href="/admin/billing/invoice/{{ invoice.pk }}/change/">Admin</a>
                     {% if invoice.status != 'VOID' %}
                     <form method="post" action="{% url 'staffops:invoice-issue' invoice.pk %}" class="inline">
                         {% csrf_token %}
@@ -65,7 +112,7 @@
                 </td>
             </tr>
             {% empty %}
-            <tr><td colspan="6">No invoices matched the current filters.</td></tr>
+            <tr><td colspan="7">No invoices matched the current filters.</td></tr>
             {% endfor %}
         </tbody>
     </table>

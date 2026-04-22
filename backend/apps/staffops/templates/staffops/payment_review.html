@@ -27,21 +27,48 @@
             <input id="processor" type="text" name="processor" value="{{ processor_filter }}">
         </div>
         <div>
+            <label for="received_from">Received From</label>
+            <input id="received_from" type="date" name="received_from" value="{{ received_from_filter }}">
+        </div>
+        <div>
+            <label for="received_to">Received To</label>
+            <input id="received_to" type="date" name="received_to" value="{{ received_to_filter }}">
+        </div>
+        <div>
             <label for="unreconciled">Unreconciled Stripe Only</label>
             <select id="unreconciled" name="unreconciled">
                 <option value="">All</option>
                 <option value="1" {% if unreconciled_filter == '1' %}selected{% endif %}>Yes</option>
             </select>
         </div>
+        <div>
+            <label for="sort">Sort</label>
+            <select id="sort" name="sort">
+                <option value="received_desc" {% if sort_filter == 'received_desc' %}selected{% endif %}>Received newest</option>
+                <option value="received_asc" {% if sort_filter == 'received_asc' %}selected{% endif %}>Received oldest</option>
+                <option value="amount_desc" {% if sort_filter == 'amount_desc' %}selected{% endif %}>Amount high-low</option>
+                <option value="amount_asc" {% if sort_filter == 'amount_asc' %}selected{% endif %}>Amount low-high</option>
+                <option value="client_asc" {% if sort_filter == 'client_asc' %}selected{% endif %}>Client</option>
+            </select>
+        </div>
         <div><button type="submit">Filter Payments</button></div>
     </form>
+    <p><a href="{{ payments_api_url }}">Open payment API</a> | <a href="{{ payment_admin_url }}">Open payment admin</a></p>
+</section>
+
+<section>
+    <h2>Common Queues</h2>
+    <p><a href="{{ payment_queue_urls.unreconciled_stripe }}">Unreconciled Stripe</a></p>
+    {% if active_queue %}
+    <p class="muted">Current queue: <strong>{{ active_queue }}</strong></p>
+    {% endif %}
 </section>
 
 <section>
     <h2>Payments</h2>
     <table>
         <thead>
-            <tr><th>ID</th><th>Client</th><th>Status</th><th>Amount</th><th>Allocate</th></tr>
+            <tr><th>ID</th><th>Client</th><th>Status</th><th>Amount</th><th>Links</th><th>Allocate</th></tr>
         </thead>
         <tbody>
             {% for row in payment_rows %}
@@ -50,6 +77,10 @@
                 <td>{{ row.payment.client.display_name }}</td>
                 <td>{{ row.payment.get_status_display }}</td>
                 <td>{{ row.payment.amount_cents }}</td>
+                <td>
+                    {% if row.payment.member %}<a href="{% url 'staffops:member-workspace' row.payment.member.pk %}">Member</a>{% endif %}
+                    <a href="/admin/billing/payment/{{ row.payment.pk }}/change/">Admin</a>
+                </td>
                 <td>
                     {% if row.available_invoices %}
                     <form method="post" action="{% url 'staffops:payment-allocate' row.payment.pk %}">
@@ -65,7 +96,7 @@
                 </td>
             </tr>
             {% empty %}
-            <tr><td colspan="5">No payments matched the current filters.</td></tr>
+            <tr><td colspan="6">No payments matched the current filters.</td></tr>
             {% endfor %}
         </tbody>
     </table>

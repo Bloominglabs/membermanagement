@@ -1,0 +1,133 @@
+{% extends "staffops/base.html" %}
+
+{% block title %}Global Search{% endblock %}
+{% block heading %}Global Search{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Search</h2>
+    <form method="get" class="actions">
+        <div>
+            <label for="global-query">Query</label>
+            <input id="global-query" type="text" name="q" value="{{ global_query }}">
+        </div>
+        <div><button type="submit">Search</button></div>
+    </form>
+    <p>
+        <a href="{{ members_api_url }}">Members API</a> |
+        <a href="{{ clients_api_url }}">Clients API</a> |
+        <a href="{{ invoices_api_url }}">Invoices API</a> |
+        <a href="{{ payments_api_url }}">Payments API</a>
+    </p>
+</section>
+
+<section>
+    <h2>Members</h2>
+    <p><a href="{{ member_admin_url }}">Open member admin</a></p>
+    <table>
+        <thead>
+            <tr><th>Member</th><th>Status</th><th>Workspace</th><th>Admin</th></tr>
+        </thead>
+        <tbody>
+            {% for member in members %}
+            <tr>
+                <td>{{ member.client.display_name }}</td>
+                <td>{{ member.get_status_display }}</td>
+                <td><a href="{% url 'staffops:member-workspace' member.pk %}">Workspace</a></td>
+                <td><a href="/admin/members/member/{{ member.pk }}/change/">Admin</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No matching members.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Clients</h2>
+    <p><a href="{{ client_admin_url }}">Open client admin</a></p>
+    <table>
+        <thead>
+            <tr><th>Client</th><th>Email</th><th>Member</th><th>Admin</th></tr>
+        </thead>
+        <tbody>
+            {% for client in clients %}
+            <tr>
+                <td>{{ client.display_name }}</td>
+                <td>{{ client.email }}</td>
+                <td>{% if client.member %}<a href="{% url 'staffops:member-workspace' client.member.pk %}">Workspace</a>{% else %}-{% endif %}</td>
+                <td><a href="/admin/members/client/{{ client.pk }}/change/">Admin</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No matching clients.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Invoices</h2>
+    <p><a href="{{ invoices_api_url }}">Open invoice API</a> | <a href="{{ invoice_admin_url }}">Open invoice admin</a></p>
+    <table>
+        <thead>
+            <tr><th>Invoice</th><th>Client</th><th>Workspace</th><th>Admin</th></tr>
+        </thead>
+        <tbody>
+            {% for invoice in invoices %}
+            <tr>
+                <td>{{ invoice.invoice_number }}</td>
+                <td>{{ invoice.client.display_name }}</td>
+                <td>{% if invoice.member %}<a href="{% url 'staffops:member-workspace' invoice.member.pk %}">Workspace</a>{% else %}-{% endif %}</td>
+                <td><a href="/admin/billing/invoice/{{ invoice.pk }}/change/">Admin</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No matching invoices.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Payments</h2>
+    <p><a href="{{ payments_api_url }}">Open payment API</a> | <a href="{{ payment_admin_url }}">Open payment admin</a></p>
+    <table>
+        <thead>
+            <tr><th>ID</th><th>Client</th><th>Workspace</th><th>Admin</th></tr>
+        </thead>
+        <tbody>
+            {% for payment in payments %}
+            <tr>
+                <td>{{ payment.pk }}</td>
+                <td>{{ payment.client.display_name }}</td>
+                <td>{% if payment.member %}<a href="{% url 'staffops:member-workspace' payment.member.pk %}">Workspace</a>{% else %}-{% endif %}</td>
+                <td><a href="/admin/billing/payment/{{ payment.pk }}/change/">Admin</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No matching payments.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>RFID Credentials</h2>
+    <p><a href="{{ credential_admin_url }}">Open RFID admin</a></p>
+    <table>
+        <thead>
+            <tr><th>UID</th><th>Label</th><th>Member</th><th>Admin</th></tr>
+        </thead>
+        <tbody>
+            {% for credential in credentials %}
+            <tr>
+                <td>{{ credential.uid }}</td>
+                <td>{{ credential.label|default:"-" }}</td>
+                <td>{% if credential.member %}<a href="{% url 'staffops:member-workspace' credential.member.pk %}">{{ credential.member.client.display_name }}</a>{% else %}-{% endif %}</td>
+                <td><a href="/admin/access/rfidcredential/{{ credential.pk }}/change/">Admin</a></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4">No matching credentials.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

@@ -10,6 +10,7 @@ app_name = "staffops"
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("search/", views.global_search, name="global-search"),
     path("members/", views.member_list, name="member-list"),
     path("members/<int:member_id>/", views.member_workspace, name="member-workspace"),
     path("members/<int:member_id>/manual-payment/", views.member_manual_payment, name="member-manual-payment"),
@@ -24,6 +25,7 @@ urlpatterns = [
     path("billing/", views.billing_dashboard, name="billing-dashboard"),
     path("billing/run/", views.billing_run, name="billing-run"),
     path("billing/invoices/", views.invoice_review, name="invoice-review"),
+    path("billing/invoices/bulk-action/", views.invoice_bulk_action, name="invoice-bulk-action"),
     path("billing/invoices/<int:invoice_id>/issue/", views.invoice_issue_action, name="invoice-issue"),
     path("billing/invoices/<int:invoice_id>/void/", views.invoice_void_action, name="invoice-void"),
     path("billing/payments/", views.payment_review, name="payment-review"),

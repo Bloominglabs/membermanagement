@@ -19,7 +19,9 @@
     </form>
     <p>
         <a href="{{ financial_export_url|safe }}">Download financial CSV</a> |
-        <a href="{{ member_balances_export_url|safe }}">Download member balances CSV</a>
+        <a href="{{ member_balances_export_url|safe }}">Download member balances CSV</a> |
+        <a href="{{ financial_report_api_url|safe }}">Open financial report API</a> |
+        <a href="{{ member_balances_api_url|safe }}">Open member balances API</a>
     </p>
 </section>
 
@@ -69,5 +71,16 @@
             {% endfor %}
         </tbody>
     </table>
+</section>
+
+<section>
+    <h2>Underlying Lists</h2>
+    <p>
+        <a href="{{ member_review_url }}">Open Member List</a> |
+        <a href="{{ invoice_review_url }}">Open Invoice Review</a> |
+        <a href="{{ payment_review_url }}">Open Payment Review</a> |
+        <a href="{{ donation_review_url }}">Open Donations</a> |
+        <a href="{{ expense_review_url }}">Open Expenses</a>
+    </p>
 </section>
 {% endblock %}

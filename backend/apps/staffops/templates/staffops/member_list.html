@@ -47,9 +47,33 @@
             </select>
         </div>
         <div>
+            <label for="sort">Sort</label>
+            <select id="sort" name="sort">
+                <option value="name_asc" {% if sort_filter == 'name_asc' %}selected{% endif %}>Name A-Z</option>
+                <option value="name_desc" {% if sort_filter == 'name_desc' %}selected{% endif %}>Name Z-A</option>
+                <option value="updated_desc" {% if sort_filter == 'updated_desc' %}selected{% endif %}>Recently updated</option>
+                <option value="status_asc" {% if sort_filter == 'status_asc' %}selected{% endif %}>Status</option>
+            </select>
+        </div>
+        <div>
             <button type="submit">Filter Members</button>
         </div>
     </form>
+    <p><a href="{{ members_api_url }}">Open members API</a> | <a href="{{ members_admin_url }}">Open member admin</a></p>
+</section>
+
+<section>
+    <h2>Common Queues</h2>
+    <p>
+        <a href="{{ member_queue_urls.active }}">Active</a> |
+        <a href="{{ member_queue_urls.past_due }}">Past Due</a> |
+        <a href="{{ member_queue_urls.suspended }}">Suspended</a> |
+        <a href="{{ member_queue_urls.autopay }}">Autopay Enabled</a> |
+        <a href="{{ member_queue_urls.door_access }}">Door Access Enabled</a>
+    </p>
+    {% if active_queue %}
+    <p class="muted">Current queue: <strong>{{ active_queue }}</strong></p>
+    {% endif %}
 </section>
 
 <section>
@@ -65,6 +89,7 @@
                 <th>Credit</th>
                 <th>Autopay</th>
                 <th>Door Access</th>
+                <th>Updated</th>
                 <th>Workspace</th>
             </tr>
         </thead>
@@ -79,10 +104,11 @@
                 <td>{{ row.balance.credit_cents }}</td>
                 <td>{{ row.member.autopay_enabled|yesno:"Yes,No" }}</td>
                 <td>{{ row.member.door_access_enabled|yesno:"Yes,No" }}</td>
+                <td>{{ row.member.updated_at }}</td>
                 <td><a href="{% url 'staffops:member-workspace' row.member.pk %}">Open</a></td>
             </tr>
             {% empty %}
-            <tr><td colspan="9">No members matched the current filters.</td></tr>
+            <tr><td colspan="10">No members matched the current filters.</td></tr>
             {% endfor %}
         </tbody>
     </table>

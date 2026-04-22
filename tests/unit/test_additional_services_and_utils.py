@@ -312,6 +312,8 @@ def test_create_checkout_session_pay_balance_uses_existing_customer(settings, mo
     assert captured["session"]["customer"] == "cus_existing"
     assert captured["session"]["line_items"][0]["price_data"]["unit_amount"] == 5000
     assert captured["session"]["metadata"]["source_type"] == Payment.SourceType.DUES_PAYMENT
+    assert captured["session"]["idempotency_key"] == f"checkout:{member.pk}:pay_balance:5000"
+    assert "options" not in captured["session"]
 
 
 @pytest.mark.django_db

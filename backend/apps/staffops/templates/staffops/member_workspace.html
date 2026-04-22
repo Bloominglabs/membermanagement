@@ -38,6 +38,14 @@
             <input id="manual-amount" type="number" name="amount_cents" min="1" required>
         </div>
         <div>
+            <label for="manual-method">Payment Method</label>
+            <select id="manual-method" name="payment_method">
+                {% for value, label in manual_payment_form.fields.payment_method.choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
             <label for="manual-source">Source Type</label>
             <select id="manual-source" name="source_type">
                 {% for value, label in manual_payment_form.fields.source_type.choices %}

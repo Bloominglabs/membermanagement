@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -31,7 +32,7 @@ from apps.donations.models import Donation
 from apps.expenses.models import ExpenseCategory, ExpenseImportBatch, ImportedBankTransaction
 from apps.expenses.services import categorize_imported_transaction, import_expense_csv
 from apps.ledger.services import render_financial_report
-from apps.members.models import Member
+from apps.members.models import Client, Member
 from apps.members.services import get_member_balance, member_snapshot, sync_membership_term, update_member_status_from_balance
 from apps.staffops.forms import (
     AuditFilterForm,
@@ -47,6 +48,21 @@ from apps.staffops.forms import (
 
 def _admin_change_url(app_label: str, model_name: str, object_id: int) -> str:
     return reverse(f"admin:{app_label}_{model_name}_change", args=[object_id])
+
+
+def _admin_changelist_url(app_label: str, model_name: str) -> str:
+    return reverse(f"admin:{app_label}_{model_name}_changelist")
+
+
+def _url_with_query(name: str, **params) -> str:
+    query = urlencode({key: value for key, value in params.items() if value not in {"", None}}, doseq=True)
+    base = reverse(f"staffops:{name}")
+    return f"{base}?{query}" if query else base
+
+
+def _apply_ordering(queryset, sort_value: str, ordering_map: dict[str, tuple[str, ...]], default_sort: str):
+    resolved_sort = sort_value if sort_value in ordering_map else default_sort
+    return queryset.order_by(*ordering_map[resolved_sort]), resolved_sort
 
 
 def _parse_report_dates(request) -> tuple[date, date]:
@@ -68,6 +84,56 @@ def _run_enforcement() -> int:
     return updated
 
 
+def _member_query_filter(query: str) -> Q:
+    return (
+        Q(member_number__icontains=query)
+        | Q(client__display_name_text__icontains=query)
+        | Q(client__first_name__icontains=query)
+        | Q(client__last_name__icontains=query)
+        | Q(client__email__icontains=query)
+    )
+
+
+def _audit_entity_admin_url(entity_type: str, entity_id: str) -> str | None:
+    entity_map = {
+        "AccessAllowlistSnapshot": ("access", "accessallowlistsnapshot"),
+        "AccessEvent": ("access", "accessevent"),
+        "Client": ("members", "client"),
+        "Donation": ("donations", "donation"),
+        "Expense": ("expenses", "expense"),
+        "ExpenseCategory": ("expenses", "expensecategory"),
+        "ExpenseImportBatch": ("expenses", "expenseimportbatch"),
+        "ImportedBankTransaction": ("expenses", "importedbanktransaction"),
+        "Invoice": ("billing", "invoice"),
+        "InvoiceSchedule": ("billing", "invoiceschedule"),
+        "JournalEntry": ("ledger", "journalentry"),
+        "JournalLine": ("ledger", "journalline"),
+        "Member": ("members", "member"),
+        "Payment": ("billing", "payment"),
+        "RFIDCredential": ("access", "rfidcredential"),
+        "WebhookEvent": ("billing", "webhookevent"),
+    }
+    destination = entity_map.get(entity_type)
+    if not destination:
+        return None
+    try:
+        object_id = int(entity_id)
+    except (TypeError, ValueError):
+        return None
+    return _admin_change_url(destination[0], destination[1], object_id)
+
+
+def _audit_change_summary(entry: AuditLog) -> str:
+    keys = list(entry.changes.keys())
+    if not keys:
+        keys = sorted(set(entry.before_json.keys()) | set(entry.after_json.keys()))
+    if keys:
+        joined = ", ".join(keys[:5])
+        suffix = " ..." if len(keys) > 5 else ""
+        return f"Changed: {joined}{suffix}"
+    return entry.reason or entry.message or "-"
+
+
 @staff_member_required
 @require_GET
 def home(request):
@@ -86,28 +152,118 @@ def home(request):
         "pending_stripe_reconciliation_count": reconcile_unposted_stripe_payments(),
         "latest_allowlist_snapshot": latest_snapshot,
         "latest_access_event": AccessEvent.objects.select_related("member", "member__client").first(),
+        "member_queue_urls": {
+            "active": _url_with_query("member-list", queue="active"),
+            "past_due": _url_with_query("member-list", queue="past_due"),
+            "suspended": _url_with_query("member-list", queue="suspended"),
+            "autopay": _url_with_query("member-list", queue="autopay"),
+            "door_access": _url_with_query("member-list", queue="door_access"),
+        },
+        "billing_queue_urls": {
+            "overdue": _url_with_query("invoice-review", queue="overdue"),
+            "unreconciled_stripe": _url_with_query("payment-review", queue="unreconciled_stripe"),
+        },
+        "expense_queue_urls": {
+            "uncategorized": _url_with_query("expense-dashboard", queue="uncategorized"),
+            "needs_reconciliation": _url_with_query("expense-dashboard", queue="needs_reconciliation"),
+        },
     }
     return render(request, "staffops/home.html", context)
 
 
 @staff_member_required
 @require_GET
+def global_search(request):
+    query = request.GET.get("q", "").strip()
+    members = Member.objects.none()
+    clients = Client.objects.none()
+    invoices = Invoice.objects.none()
+    payments = Payment.objects.none()
+    credentials = RFIDCredential.objects.none()
+
+    if query:
+        members = Member.objects.select_related("client").filter(_member_query_filter(query)).order_by("-updated_at", "id")[:20]
+        clients = Client.objects.filter(
+            Q(display_name_text__icontains=query)
+            | Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
+            | Q(organization_name__icontains=query)
+            | Q(email__icontains=query)
+        ).order_by("display_name_text", "last_name", "first_name", "id")[:20]
+        invoices = Invoice.objects.select_related("client", "member", "member__client").filter(
+            Q(invoice_number__icontains=query)
+            | Q(client__display_name_text__icontains=query)
+            | Q(client__first_name__icontains=query)
+            | Q(client__last_name__icontains=query)
+            | Q(client__email__icontains=query)
+            | Q(external_reference__icontains=query)
+        ).order_by("-due_date", "-id")[:20]
+        payments = Payment.objects.select_related("client", "member", "member__client").filter(
+            Q(notes__icontains=query)
+            | Q(client__display_name_text__icontains=query)
+            | Q(client__first_name__icontains=query)
+            | Q(client__last_name__icontains=query)
+            | Q(client__email__icontains=query)
+            | Q(processor_payment_id__icontains=query)
+            | Q(processor_charge_id__icontains=query)
+        ).order_by("-received_at", "-id")[:20]
+        credentials = RFIDCredential.objects.select_related("member", "member__client").filter(
+            Q(uid__icontains=query)
+            | Q(label__icontains=query)
+            | Q(member__member_number__icontains=query)
+            | Q(member__client__display_name_text__icontains=query)
+            | Q(member__client__first_name__icontains=query)
+            | Q(member__client__last_name__icontains=query)
+        ).order_by("uid", "id")[:20]
+        if query.isdigit():
+            payments = (payments | Payment.objects.select_related("client", "member", "member__client").filter(pk=int(query))).distinct()[:20]
+
+    context = {
+        "active_nav": "",
+        "global_query": query,
+        "members": members,
+        "clients": clients,
+        "invoices": invoices,
+        "payments": payments,
+        "credentials": credentials,
+        "members_api_url": "/api/members/",
+        "clients_api_url": "/api/clients/",
+        "invoices_api_url": "/api/invoices/",
+        "payments_api_url": "/api/payments/",
+        "member_admin_url": _admin_changelist_url("members", "member"),
+        "client_admin_url": _admin_changelist_url("members", "client"),
+        "invoice_admin_url": _admin_changelist_url("billing", "invoice"),
+        "payment_admin_url": _admin_changelist_url("billing", "payment"),
+        "credential_admin_url": _admin_changelist_url("access", "rfidcredential"),
+    }
+    return render(request, "staffops/search.html", context)
+
+
+@staff_member_required
+@require_GET
 def member_list(request):
     members = Member.objects.select_related("client").all()
+    queue = request.GET.get("queue", "").strip()
     query = request.GET.get("query", "").strip()
     status = request.GET.get("status", "").strip()
     membership_class = request.GET.get("membership_class", "").strip()
     autopay_enabled = request.GET.get("autopay_enabled", "").strip()
     door_access_enabled = request.GET.get("door_access_enabled", "").strip()
+    sort = request.GET.get("sort", "").strip()
+
+    if queue == "active":
+        members = members.filter(status=Member.Status.ACTIVE)
+    elif queue == "past_due":
+        members = members.filter(status=Member.Status.PAST_DUE)
+    elif queue == "suspended":
+        members = members.filter(status=Member.Status.SUSPENDED)
+    elif queue == "autopay":
+        members = members.filter(autopay_enabled=True)
+    elif queue == "door_access":
+        members = members.filter(door_access_enabled=True)
 
     if query:
-        members = members.filter(
-            Q(member_number__icontains=query)
-            | Q(client__display_name_text__icontains=query)
-            | Q(client__first_name__icontains=query)
-            | Q(client__last_name__icontains=query)
-            | Q(client__email__icontains=query)
-        )
+        members = members.filter(_member_query_filter(query))
     if status:
         members = members.filter(status=status)
     if membership_class:
@@ -117,7 +273,18 @@ def member_list(request):
     if door_access_enabled in {"0", "1"}:
         members = members.filter(door_access_enabled=door_access_enabled == "1")
 
-    member_rows = [{"member": member, "balance": get_member_balance(member)} for member in members.order_by("client__last_name", "client__first_name", "id")]
+    members, resolved_sort = _apply_ordering(
+        members,
+        sort,
+        {
+            "name_asc": ("client__display_name_text", "client__last_name", "client__first_name", "id"),
+            "name_desc": ("-client__display_name_text", "-client__last_name", "-client__first_name", "-id"),
+            "updated_desc": ("-updated_at", "-id"),
+            "status_asc": ("status", "client__display_name_text", "id"),
+        },
+        "name_asc",
+    )
+    member_rows = [{"member": member, "balance": get_member_balance(member)} for member in members]
     context = {
         "active_nav": "members",
         "member_rows": member_rows,
@@ -126,6 +293,17 @@ def member_list(request):
         "membership_class_filter": membership_class,
         "autopay_enabled_filter": autopay_enabled,
         "door_access_enabled_filter": door_access_enabled,
+        "sort_filter": resolved_sort,
+        "active_queue": queue,
+        "member_queue_urls": {
+            "active": _url_with_query("member-list", queue="active"),
+            "past_due": _url_with_query("member-list", queue="past_due"),
+            "suspended": _url_with_query("member-list", queue="suspended"),
+            "autopay": _url_with_query("member-list", queue="autopay"),
+            "door_access": _url_with_query("member-list", queue="door_access"),
+        },
+        "members_api_url": "/api/members/",
+        "members_admin_url": _admin_changelist_url("members", "member"),
     }
     return render(request, "staffops/member_list.html", context)
 
@@ -144,7 +322,12 @@ def member_workspace(request, member_id: int):
         "recent_payments": member.payments.order_by("-received_at", "-id")[:10],
         "recent_audit_entries": AuditLog.objects.filter(entity_type="Member", entity_id=str(member.pk)).order_by("-occurred_at", "-id")[:20],
         "invoice_schedules": member.invoice_schedules.order_by("id"),
-        "manual_payment_form": ManualPaymentForm(initial={"source_type": Payment.SourceType.DUES_PAYMENT}),
+        "manual_payment_form": ManualPaymentForm(
+            initial={
+                "payment_method": Payment.PaymentMethod.CASH,
+                "source_type": Payment.SourceType.DUES_PAYMENT,
+            }
+        ),
         "one_off_invoice_form": OneOffInvoiceForm(),
         "rfid_form": RFIDCredentialForm(),
         "door_access_form": DoorAccessForm(initial={"door_access_enabled": member.door_access_enabled}),
@@ -166,6 +349,7 @@ def member_manual_payment(request, member_id: int):
     payment = record_manual_payment(
         member=member,
         amount_cents=form.cleaned_data["amount_cents"],
+        payment_method=form.cleaned_data.get("payment_method") or Payment.PaymentMethod.CASH,
         source_type=form.cleaned_data["source_type"],
         note=form.cleaned_data["note"],
     )
@@ -300,6 +484,14 @@ def billing_dashboard(request):
         "recent_payments": Payment.objects.select_related("member", "client").order_by("-received_at", "-id")[:10],
         "invoice_schedules": InvoiceSchedule.objects.select_related("member", "client").order_by("id")[:20],
         "run_form": BillingRunForm(),
+        "invoice_queue_urls": {
+            "overdue": _url_with_query("invoice-review", queue="overdue"),
+            "drafts": _url_with_query("invoice-review", status=Invoice.Status.DRAFT),
+        },
+        "payment_queue_urls": {
+            "unreconciled_stripe": _url_with_query("payment-review", queue="unreconciled_stripe"),
+            "manual": _url_with_query("payment-review", processor="", source_type=Payment.SourceType.DUES_PAYMENT),
+        },
     }
     return render(request, "staffops/billing_dashboard.html", context)
 
@@ -335,9 +527,17 @@ def billing_run(request):
 @require_GET
 def invoice_review(request):
     invoices = Invoice.objects.select_related("member", "client").all()
+    queue = request.GET.get("queue", "").strip()
     status = request.GET.get("status", "").strip()
     invoice_type = request.GET.get("invoice_type", "").strip()
     query = request.GET.get("query", "").strip()
+    due_from = request.GET.get("due_from", "").strip()
+    due_to = request.GET.get("due_to", "").strip()
+    sort = request.GET.get("sort", "").strip()
+    if queue == "overdue":
+        invoices = invoices.exclude(status__in=[Invoice.Status.DRAFT, Invoice.Status.PAID, Invoice.Status.VOID]).filter(
+            due_date__lt=timezone.localdate()
+        )
     if status:
         invoices = invoices.filter(status=status)
     if invoice_type:
@@ -348,12 +548,38 @@ def invoice_review(request):
             | Q(client__display_name_text__icontains=query)
             | Q(client__email__icontains=query)
         )
+    if due_from:
+        invoices = invoices.filter(due_date__gte=due_from)
+    if due_to:
+        invoices = invoices.filter(due_date__lte=due_to)
+    invoices, resolved_sort = _apply_ordering(
+        invoices,
+        sort,
+        {
+            "due_desc": ("-due_date", "-issue_date", "-id"),
+            "due_asc": ("due_date", "issue_date", "id"),
+            "total_desc": ("-total_cents", "-due_date", "-id"),
+            "client_asc": ("client__display_name_text", "invoice_number", "id"),
+        },
+        "due_desc",
+    )
     context = {
         "active_nav": "billing",
-        "invoices": invoices.order_by("-due_date", "-issue_date", "-id")[:100],
+        "invoices": invoices[:100],
         "status_filter": status,
         "invoice_type_filter": invoice_type,
         "query": query,
+        "due_from_filter": due_from,
+        "due_to_filter": due_to,
+        "sort_filter": resolved_sort,
+        "active_queue": queue,
+        "current_url": request.get_full_path(),
+        "invoice_queue_urls": {
+            "overdue": _url_with_query("invoice-review", queue="overdue"),
+            "drafts": _url_with_query("invoice-review", status=Invoice.Status.DRAFT),
+        },
+        "invoices_api_url": "/api/invoices/",
+        "invoice_admin_url": _admin_changelist_url("billing", "invoice"),
     }
     return render(request, "staffops/invoice_review.html", context)
 
@@ -377,13 +603,44 @@ def invoice_void_action(request, invoice_id: int):
 
 
 @staff_member_required
+@require_POST
+def invoice_bulk_action(request):
+    action = request.POST.get("action", "").strip()
+    invoice_ids = [int(invoice_id) for invoice_id in request.POST.getlist("invoice_ids") if invoice_id]
+    next_url = request.POST.get("next", "").strip()
+    if not invoice_ids:
+        messages.error(request, "Select at least one invoice.")
+    else:
+        invoices = list(Invoice.objects.filter(pk__in=invoice_ids).order_by("id"))
+        if action == "issue":
+            for invoice in invoices:
+                issue_invoice(invoice)
+            messages.success(request, f"Issued {len(invoices)} invoices.")
+        elif action == "void":
+            for invoice in invoices:
+                void_invoice(invoice)
+            messages.success(request, f"Voided {len(invoices)} invoices.")
+        else:
+            messages.error(request, "Bulk invoice action was invalid.")
+    if next_url.startswith(reverse("staffops:invoice-review")):
+        return redirect(next_url)
+    return redirect("staffops:invoice-review")
+
+
+@staff_member_required
 @require_GET
 def payment_review(request):
     payments = Payment.objects.select_related("member", "client").all()
+    queue = request.GET.get("queue", "").strip()
     status = request.GET.get("status", "").strip()
     source_type = request.GET.get("source_type", "").strip()
     processor = request.GET.get("processor", "").strip()
     unreconciled = request.GET.get("unreconciled", "").strip()
+    received_from = request.GET.get("received_from", "").strip()
+    received_to = request.GET.get("received_to", "").strip()
+    sort = request.GET.get("sort", "").strip()
+    if queue == "unreconciled_stripe":
+        payments = payments.filter(processor=ProcessorChoices.STRIPE, processor_balance_txn_id__isnull=True)
     if status:
         payments = payments.filter(status=status)
     if source_type:
@@ -392,15 +649,30 @@ def payment_review(request):
         payments = payments.filter(processor=processor)
     if unreconciled == "1":
         payments = payments.filter(processor=ProcessorChoices.STRIPE, processor_balance_txn_id__isnull=True)
+    if received_from:
+        payments = payments.filter(received_at__date__gte=received_from)
+    if received_to:
+        payments = payments.filter(received_at__date__lte=received_to)
+    payments, resolved_sort = _apply_ordering(
+        payments,
+        sort,
+        {
+            "received_desc": ("-received_at", "-id"),
+            "received_asc": ("received_at", "id"),
+            "amount_desc": ("-amount_cents", "-received_at", "-id"),
+            "amount_asc": ("amount_cents", "received_at", "id"),
+            "client_asc": ("client__display_name_text", "-received_at", "-id"),
+        },
+        "received_desc",
+    )
 
     payment_rows = []
-    for payment in payments.order_by("-received_at", "-id")[:100]:
+    for payment in payments[:100]:
         available_invoices = []
         if payment.member_id:
             available_invoices = list(
                 Invoice.objects.filter(member=payment.member)
-                .exclude(status=Invoice.Status.VOID)
-                .exclude(status=Invoice.Status.PAID)
+                .exclude(status__in=[Invoice.Status.DRAFT, Invoice.Status.VOID, Invoice.Status.PAID])
                 .order_by("due_date", "issue_date", "id")
             )
         payment_rows.append({"payment": payment, "available_invoices": available_invoices})
@@ -412,6 +684,16 @@ def payment_review(request):
         "source_type_filter": source_type,
         "processor_filter": processor,
         "unreconciled_filter": unreconciled,
+        "received_from_filter": received_from,
+        "received_to_filter": received_to,
+        "sort_filter": resolved_sort,
+        "active_queue": queue,
+        "payment_queue_urls": {
+            "unreconciled_stripe": _url_with_query("payment-review", queue="unreconciled_stripe"),
+            "manual": _url_with_query("payment-review", processor="", source_type=Payment.SourceType.DUES_PAYMENT),
+        },
+        "payments_api_url": "/api/payments/",
+        "payment_admin_url": _admin_changelist_url("billing", "payment"),
     }
     return render(request, "staffops/payment_review.html", context)
 
@@ -422,7 +704,11 @@ def payment_allocate_action(request, payment_id: int):
     payment = get_object_or_404(Payment.objects.select_related("member"), pk=payment_id)
     invoice_ids = [int(invoice_id) for invoice_id in request.POST.getlist("invoice_ids") if invoice_id]
     invoices = list(Invoice.objects.filter(pk__in=invoice_ids).order_by("due_date", "id")) if invoice_ids else None
-    result = allocate_payment_fifo(payment, invoices=invoices)
+    try:
+        result = allocate_payment_fifo(payment, invoices=invoices)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("staffops:payment-review")
     messages.success(request, f"Allocated {result.allocated_cents} cents across {len(result.invoice_numbers)} invoices.")
     return redirect("staffops:payment-review")
 
@@ -434,24 +720,48 @@ def donation_list(request):
     return render(
         request,
         "staffops/donation_list.html",
-        {"active_nav": "donations", "donations": donations},
+        {
+            "active_nav": "donations",
+            "donations": donations,
+            "donations_api_url": "/api/donations",
+            "donation_admin_url": _admin_changelist_url("donations", "donation"),
+            "donation_audit_url": _url_with_query("audit-timeline", entity_type="Donation"),
+        },
     )
 
 
 @staff_member_required
 @require_GET
 def expense_dashboard(request):
+    queue = request.GET.get("queue", "").strip()
+    uncategorized_transactions = ImportedBankTransaction.objects.select_related("expense").filter(expense__isnull=True).order_by(
+        "-posted_on", "-id"
+    )
+    categorized_transactions = ImportedBankTransaction.objects.select_related("expense", "expense__category").filter(
+        expense__isnull=False
+    ).order_by("-posted_on", "-id")
+    if queue == "uncategorized":
+        categorized_transactions = ImportedBankTransaction.objects.none()
+    elif queue == "needs_reconciliation":
+        uncategorized_transactions = ImportedBankTransaction.objects.none()
+        categorized_transactions = categorized_transactions.filter(is_reconciled=False)
     context = {
         "active_nav": "expenses",
         "import_form": ExpenseImportForm(initial={"parser_key": "generic_csv"}),
         "recent_batches": ExpenseImportBatch.objects.select_related("source").order_by("-imported_at", "-id")[:20],
-        "uncategorized_transactions": ImportedBankTransaction.objects.select_related("expense").filter(expense__isnull=True).order_by(
-            "-posted_on", "-id"
-        )[:50],
-        "categorized_transactions": ImportedBankTransaction.objects.select_related("expense", "expense__category").filter(
-            expense__isnull=False
-        ).order_by("-posted_on", "-id")[:50],
+        "uncategorized_transactions": uncategorized_transactions[:50],
+        "categorized_transactions": categorized_transactions[:50],
         "categorize_form": ExpenseCategorizeForm(),
+        "active_queue": queue,
+        "expense_queue_urls": {
+            "uncategorized": _url_with_query("expense-dashboard", queue="uncategorized"),
+            "needs_reconciliation": _url_with_query("expense-dashboard", queue="needs_reconciliation"),
+        },
+        "expense_batches_api_url": "/api/expenses/import-batches",
+        "expense_import_admin_url": _admin_changelist_url("expenses", "expenseimportbatch"),
+        "expense_transaction_admin_url": _admin_changelist_url("expenses", "importedbanktransaction"),
+        "expense_rule_admin_url": _admin_changelist_url("expenses", "expensecategorizationrule"),
+        "expense_rule_api_url": "/api/expense-categorization-rules/",
     }
     return render(request, "staffops/expense_dashboard.html", context)
 
@@ -498,11 +808,20 @@ def expense_categorize_action(request, transaction_id: int):
 @staff_member_required
 @require_GET
 def access_dashboard(request):
+    latest_snapshot = AccessAllowlistSnapshot.objects.first()
     context = {
         "active_nav": "access",
-        "latest_snapshot": AccessAllowlistSnapshot.objects.first(),
+        "latest_snapshot": latest_snapshot,
         "credentials": RFIDCredential.objects.select_related("member", "member__client").order_by("uid")[:100],
         "access_events": AccessEvent.objects.select_related("member", "member__client").order_by("-occurred_at", "-id")[:100],
+        "allowlist_api_url": "/api/access/allowlist/",
+        "access_events_api_url": "/api/access/events/",
+        "credential_admin_url": _admin_changelist_url("access", "rfidcredential"),
+        "allowlist_admin_url": _admin_changelist_url("access", "accessallowlistsnapshot"),
+        "access_event_admin_url": _admin_changelist_url("access", "accessevent"),
+        "credential_audit_url": _url_with_query("audit-timeline", entity_type="RFIDCredential"),
+        "allowlist_audit_url": _url_with_query("audit-timeline", entity_type="AccessAllowlistSnapshot"),
+        "access_event_audit_url": _url_with_query("audit-timeline", entity_type="AccessEvent"),
     }
     return render(request, "staffops/access_dashboard.html", context)
 
@@ -542,6 +861,13 @@ def reports_dashboard(request):
         ],
         "financial_export_url": f"/api/exports/financial.csv?from={start.isoformat()}&to={end.isoformat()}",
         "member_balances_export_url": "/api/exports/member-balances.csv",
+        "financial_report_api_url": f"/api/reports/financial?from={start.isoformat()}&to={end.isoformat()}",
+        "member_balances_api_url": "/api/reports/member-balances",
+        "invoice_review_url": _url_with_query("invoice-review", due_from=start.isoformat(), due_to=end.isoformat()),
+        "payment_review_url": _url_with_query("payment-review", received_from=start.isoformat(), received_to=end.isoformat()),
+        "member_review_url": reverse("staffops:member-list"),
+        "donation_review_url": reverse("staffops:donation-list"),
+        "expense_review_url": reverse("staffops:expense-dashboard"),
     }
     return render(request, "staffops/reports_dashboard.html", context)
 
@@ -554,13 +880,28 @@ def audit_timeline(request):
     if form.is_valid():
         if form.cleaned_data["entity_type"]:
             logs = logs.filter(entity_type=form.cleaned_data["entity_type"])
+        if form.cleaned_data["entity_id"]:
+            logs = logs.filter(entity_id=form.cleaned_data["entity_id"])
         if form.cleaned_data["action"]:
             logs = logs.filter(action=form.cleaned_data["action"])
         if form.cleaned_data["actor"]:
             logs = logs.filter(actor__icontains=form.cleaned_data["actor"])
+        if form.cleaned_data["occurred_from"]:
+            logs = logs.filter(occurred_at__date__gte=form.cleaned_data["occurred_from"])
+        if form.cleaned_data["occurred_to"]:
+            logs = logs.filter(occurred_at__date__lte=form.cleaned_data["occurred_to"])
+    audit_rows = []
+    for entry in logs.order_by("-occurred_at", "-id")[:200]:
+        audit_rows.append(
+            {
+                "entry": entry,
+                "entity_admin_url": _audit_entity_admin_url(entry.entity_type, entry.entity_id),
+                "change_summary": _audit_change_summary(entry),
+            }
+        )
     context = {
         "active_nav": "audit",
-        "audit_logs": logs.order_by("-occurred_at", "-id")[:200],
+        "audit_rows": audit_rows,
         "filters": form,
     }
     return render(request, "staffops/audit_timeline.html", context)

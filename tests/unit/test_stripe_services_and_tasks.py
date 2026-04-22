@@ -49,6 +49,8 @@ def test_create_checkout_session_top_up_uses_stripe_and_metadata(settings, monke
     assert session["id"] == "cs_123"
     assert captured["session"]["metadata"]["purpose"] == "top_up"
     assert captured["session"]["line_items"][0]["price_data"]["unit_amount"] == 2500
+    assert captured["session"]["idempotency_key"] == f"checkout:{member.pk}:top_up:2500"
+    assert "options" not in captured["session"]
     member.refresh_from_db()
     assert member.stripe_customer_id == "cus_123"
 
@@ -149,6 +151,8 @@ def test_dues_autopay_run_creates_off_session_payment_intent(settings, monkeypat
     assert results[0]["payment_intent_id"] == "pi_auto_1"
     assert captured["payment_intent"]["off_session"] is True
     assert captured["payment_intent"]["payment_method"] == "pm_auto"
+    assert captured["payment_intent"]["idempotency_key"] == f"autopay:{member.pk}:{date.today().isoformat()}:5000"
+    assert "options" not in captured["payment_intent"]
 
 
 @pytest.mark.django_db

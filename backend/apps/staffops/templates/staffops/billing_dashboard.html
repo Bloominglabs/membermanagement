@@ -46,6 +46,15 @@
 </section>
 
 <section>
+    <h2>Common Queues</h2>
+    <p>
+        <a href="{{ invoice_queue_urls.overdue }}">Overdue Invoices</a> |
+        <a href="{{ invoice_queue_urls.drafts }}">Draft Invoices</a> |
+        <a href="{{ payment_queue_urls.unreconciled_stripe }}">Unreconciled Stripe Payments</a>
+    </p>
+</section>
+
+<section>
     <h2>Recent Invoices</h2>
     <p><a href="{% url 'staffops:invoice-review' %}">Open Invoice Review</a></p>
     <table>

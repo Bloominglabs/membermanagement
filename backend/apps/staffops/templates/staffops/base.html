@@ -21,6 +21,18 @@
             gap: 0.75rem;
             margin-top: 0.75rem;
         }
+        .header-tools {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-search {
+            display: flex;
+            gap: 0.5rem;
+            align-items: end;
+        }
         nav a {
             padding: 0.4rem 0.65rem;
             background: #ffffff;
@@ -100,17 +112,26 @@
 <body>
 <header>
     <h1>{% block heading %}Staff Operations{% endblock %}</h1>
-    <nav>
-        <a href="{% url 'staffops:home' %}" class="{% if active_nav == 'home' %}active{% endif %}">Home</a>
-        <a href="{% url 'staffops:member-list' %}" class="{% if active_nav == 'members' %}active{% endif %}">Members</a>
-        <a href="{% url 'staffops:billing-dashboard' %}" class="{% if active_nav == 'billing' %}active{% endif %}">Billing</a>
-        <a href="{% url 'staffops:donation-list' %}" class="{% if active_nav == 'donations' %}active{% endif %}">Donations</a>
-        <a href="{% url 'staffops:expense-dashboard' %}" class="{% if active_nav == 'expenses' %}active{% endif %}">Expenses</a>
-        <a href="{% url 'staffops:access-dashboard' %}" class="{% if active_nav == 'access' %}active{% endif %}">Access</a>
-        <a href="{% url 'staffops:reports-dashboard' %}" class="{% if active_nav == 'reports' %}active{% endif %}">Reports</a>
-        <a href="{% url 'staffops:audit-timeline' %}" class="{% if active_nav == 'audit' %}active{% endif %}">Audit</a>
-        <a href="/admin/">Admin</a>
-    </nav>
+    <div class="header-tools">
+        <nav>
+            <a href="{% url 'staffops:home' %}" class="{% if active_nav == 'home' %}active{% endif %}">Home</a>
+            <a href="{% url 'staffops:member-list' %}" class="{% if active_nav == 'members' %}active{% endif %}">Members</a>
+            <a href="{% url 'staffops:billing-dashboard' %}" class="{% if active_nav == 'billing' %}active{% endif %}">Billing</a>
+            <a href="{% url 'staffops:donation-list' %}" class="{% if active_nav == 'donations' %}active{% endif %}">Donations</a>
+            <a href="{% url 'staffops:expense-dashboard' %}" class="{% if active_nav == 'expenses' %}active{% endif %}">Expenses</a>
+            <a href="{% url 'staffops:access-dashboard' %}" class="{% if active_nav == 'access' %}active{% endif %}">Access</a>
+            <a href="{% url 'staffops:reports-dashboard' %}" class="{% if active_nav == 'reports' %}active{% endif %}">Reports</a>
+            <a href="{% url 'staffops:audit-timeline' %}" class="{% if active_nav == 'audit' %}active{% endif %}">Audit</a>
+            <a href="/admin/">Admin</a>
+        </nav>
+        <form method="get" action="{% url 'staffops:global-search' %}" class="header-search">
+            <div>
+                <label for="header-global-search">Global Search</label>
+                <input id="header-global-search" type="text" name="q" value="{{ global_query|default:'' }}">
+            </div>
+            <div><button type="submit">Search</button></div>
+        </form>
+    </div>
     {% if messages %}
     <ul class="messages">
         {% for message in messages %}

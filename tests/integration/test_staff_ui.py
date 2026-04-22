@@ -173,7 +173,12 @@ def test_staff_member_workspace_actions_record_payment_create_invoice_and_manage
 
     payment_response = staff_client.post(
         f"/staff/members/{member.pk}/manual-payment/",
-        data={"amount_cents": 5000, "source_type": Payment.SourceType.DUES_PAYMENT, "note": "front desk cash"},
+        data={
+            "amount_cents": 5000,
+            "payment_method": Payment.PaymentMethod.CASH,
+            "source_type": Payment.SourceType.DUES_PAYMENT,
+            "note": "front desk cash",
+        },
         follow=True,
     )
     invoice_response = staff_client.post(
@@ -198,7 +203,7 @@ def test_staff_member_workspace_actions_record_payment_create_invoice_and_manage
     assert invoice_response.status_code == 200
     assert credential_response.status_code == 200
     assert access_response.status_code == 200
-    assert Payment.objects.filter(member=member, amount_cents=5000).exists()
+    assert Payment.objects.filter(member=member, amount_cents=5000, payment_method=Payment.PaymentMethod.CASH).exists()
     assert Invoice.objects.filter(member=member, invoice_number="INV-ACTION-002").exists()
     assert RFIDCredential.objects.filter(member=member, uid="rfid-action-1", is_active=True).exists()
     assert member.door_access_enabled is True
@@ -391,6 +396,282 @@ def test_staff_audit_page_filters_entries(staff_client):
     content = response.content.decode("utf-8")
     assert "member.updated" in content
     assert "invoice.issued" not in content
+
+
+@pytest.mark.django_db
+def test_staff_home_and_review_pages_expose_operational_queues(staff_client):
+    active_member = create_member("Active Queue", "active-queue@example.org", status=Member.Status.ACTIVE)
+    past_due_member = create_member(
+        "Past Due Queue",
+        "past-due-queue@example.org",
+        status=Member.Status.PAST_DUE,
+        autopay_enabled=True,
+        door_access_enabled=True,
+    )
+    create_invoice(
+        active_member,
+        number="INV-QUEUE-CURRENT",
+        due_date=date.today() + timedelta(days=7),
+    )
+    overdue_invoice = create_invoice(
+        past_due_member,
+        number="INV-QUEUE-OVERDUE",
+        due_date=date.today() - timedelta(days=7),
+    )
+    stripe_payment = Payment.objects.create(
+        client=past_due_member.client,
+        member=past_due_member,
+        amount_cents=3500,
+        currency="usd",
+        payment_method=Payment.PaymentMethod.STRIPE_CARD,
+        source_type=Payment.SourceType.DUES_PAYMENT,
+        processor=ProcessorChoices.STRIPE,
+        processor_payment_id="pi-queue-1",
+        status=Payment.Status.SUCCEEDED,
+    )
+    Payment.objects.create(
+        client=active_member.client,
+        member=active_member,
+        amount_cents=2000,
+        currency="usd",
+        payment_method=Payment.PaymentMethod.CASH,
+        source_type=Payment.SourceType.DUES_PAYMENT,
+        status=Payment.Status.SUCCEEDED,
+    )
+
+    home_response = staff_client.get("/staff/")
+    past_due_response = staff_client.get("/staff/members/", {"queue": "past_due"})
+    door_access_response = staff_client.get("/staff/members/", {"queue": "door_access"})
+    overdue_response = staff_client.get("/staff/billing/invoices/", {"queue": "overdue"})
+    stripe_queue_response = staff_client.get("/staff/billing/payments/", {"queue": "unreconciled_stripe"})
+
+    assert home_response.status_code == 200
+    home_content = home_response.content.decode("utf-8")
+    assert "/staff/members/?queue=active" in home_content
+    assert "/staff/members/?queue=past_due" in home_content
+    assert "/staff/members/?queue=suspended" in home_content
+    assert "/staff/members/?queue=autopay" in home_content
+    assert "/staff/members/?queue=door_access" in home_content
+    assert "/staff/billing/invoices/?queue=overdue" in home_content
+    assert "/staff/billing/payments/?queue=unreconciled_stripe" in home_content
+    assert "/staff/expenses/?queue=uncategorized" in home_content
+    assert "/staff/expenses/?queue=needs_reconciliation" in home_content
+
+    past_due_content = past_due_response.content.decode("utf-8")
+    assert "Past Due Queue" in past_due_content
+    assert "Active Queue" not in past_due_content
+
+    door_access_content = door_access_response.content.decode("utf-8")
+    assert "Past Due Queue" in door_access_content
+    assert "Active Queue" not in door_access_content
+
+    overdue_content = overdue_response.content.decode("utf-8")
+    assert overdue_invoice.invoice_number in overdue_content
+    assert "INV-QUEUE-CURRENT" not in overdue_content
+
+    stripe_queue_content = stripe_queue_response.content.decode("utf-8")
+    assert str(stripe_payment.pk) in stripe_queue_content
+    assert "Allocate Payment" in stripe_queue_content
+
+
+@pytest.mark.django_db
+def test_staff_invoice_review_supports_bulk_issue_and_void(staff_client):
+    member = create_member("Bulk Invoice Member", "bulk-invoice@example.org")
+    draft_one = create_invoice(
+        member,
+        number="INV-BULK-DRAFT-001",
+        due_date=date.today(),
+        total_cents=1400,
+        status=Invoice.Status.DRAFT,
+    )
+    draft_two = create_invoice(
+        member,
+        number="INV-BULK-DRAFT-002",
+        due_date=date.today() + timedelta(days=1),
+        total_cents=1600,
+        status=Invoice.Status.DRAFT,
+    )
+    issued_one = create_invoice(
+        member,
+        number="INV-BULK-ISSUED-001",
+        due_date=date.today() + timedelta(days=2),
+        total_cents=1800,
+        status=Invoice.Status.ISSUED,
+    )
+
+    issue_response = staff_client.post(
+        "/staff/billing/invoices/bulk-action/",
+        data={"action": "issue", "invoice_ids": [draft_one.pk, draft_two.pk]},
+        follow=True,
+    )
+    void_response = staff_client.post(
+        "/staff/billing/invoices/bulk-action/",
+        data={"action": "void", "invoice_ids": [issued_one.pk]},
+        follow=True,
+    )
+
+    draft_one.refresh_from_db()
+    draft_two.refresh_from_db()
+    issued_one.refresh_from_db()
+
+    assert issue_response.status_code == 200
+    assert void_response.status_code == 200
+    assert draft_one.status == Invoice.Status.ISSUED
+    assert draft_two.status == Invoice.Status.ISSUED
+    assert issued_one.status == Invoice.Status.VOID
+
+
+@pytest.mark.django_db
+def test_staff_support_pages_expose_escape_hatches_and_expense_queues(staff_client):
+    member = create_member("Support Member", "support-member@example.org", door_access_enabled=True)
+    snapshot = AccessAllowlistSnapshot.objects.create(
+        etag="etag-support-1",
+        payload_json={"members": [{"member_id": member.pk}]},
+        signature="sig-support-1",
+    )
+    RFIDCredential.objects.create(member=member, uid="rfid-support-1", label="Support Fob")
+    AccessEvent.objects.create(member=member, credential_uid="rfid-support-1", result="granted")
+    Donation.objects.create(
+        external_charge_id="every-support-1",
+        donor_name="Support Donor",
+        amount_cents=2200,
+        currency="usd",
+        donation_date="2026-04-04T00:00:00Z",
+        raw_payload={"chargeId": "every-support-1"},
+    )
+    source = BankImportSource.objects.create(name="Operations", parser_key="generic_csv")
+    batch = ExpenseImportBatch.objects.create(source=source)
+    uncategorized = ImportedBankTransaction.objects.create(
+        source=source,
+        import_batch=batch,
+        posted_on=date(2026, 4, 7),
+        description_raw="Raw Utilities",
+        amount_cents=800,
+        direction=ImportedBankTransaction.Direction.DEBIT,
+        currency="usd",
+        external_hash="support-expense-uncategorized",
+    )
+    reconciled_expense = Expense.objects.create(
+        description="Reconciled Internet",
+        booked_on=date(2026, 4, 6),
+        amount_cents=900,
+        review_status=Expense.ReviewStatus.RECONCILED,
+    )
+    needs_reconciliation_expense = Expense.objects.create(
+        description="Pending Reconciliation",
+        booked_on=date(2026, 4, 5),
+        amount_cents=1100,
+        review_status=Expense.ReviewStatus.CATEGORIZED,
+    )
+    ImportedBankTransaction.objects.create(
+        source=source,
+        import_batch=batch,
+        posted_on=date(2026, 4, 6),
+        description_raw="Reconciled Internet",
+        amount_cents=900,
+        direction=ImportedBankTransaction.Direction.DEBIT,
+        currency="usd",
+        external_hash="support-expense-reconciled",
+        expense=reconciled_expense,
+        is_reconciled=True,
+    )
+    ImportedBankTransaction.objects.create(
+        source=source,
+        import_batch=batch,
+        posted_on=date(2026, 4, 5),
+        description_raw="Pending Reconciliation",
+        amount_cents=1100,
+        direction=ImportedBankTransaction.Direction.DEBIT,
+        currency="usd",
+        external_hash="support-expense-pending",
+        expense=needs_reconciliation_expense,
+        is_reconciled=False,
+    )
+
+    donation_response = staff_client.get("/staff/donations/")
+    access_response = staff_client.get("/staff/access/")
+    expense_response = staff_client.get("/staff/expenses/", {"queue": "needs_reconciliation"})
+
+    assert donation_response.status_code == 200
+    donation_content = donation_response.content.decode("utf-8")
+    assert "/api/donations" in donation_content
+    assert "/admin/donations/donation/" in donation_content
+    assert "/staff/audit/?entity_type=Donation" in donation_content
+
+    assert access_response.status_code == 200
+    access_content = access_response.content.decode("utf-8")
+    assert snapshot.etag in access_content
+    assert "/api/access/allowlist/" in access_content
+    assert "/api/access/events/" in access_content
+    assert f"/api/access/members/{member.pk}/entitlement" in access_content
+    assert "/admin/access/rfidcredential/" in access_content
+    assert "/admin/access/accessallowlistsnapshot/" in access_content
+    assert "/admin/access/accessevent/" in access_content
+    assert f"/staff/members/{member.pk}/" in access_content
+
+    assert expense_response.status_code == 200
+    expense_content = expense_response.content.decode("utf-8")
+    assert "/api/expenses/import-batches" in expense_content
+    assert "/admin/expenses/importedbanktransaction/" in expense_content
+    assert "/admin/expenses/expensecategorizationrule/" in expense_content
+    assert "/staff/expenses/?queue=uncategorized" in expense_content
+    assert "/staff/expenses/?queue=needs_reconciliation" in expense_content
+    assert "Pending Reconciliation" in expense_content
+    assert uncategorized.description_raw not in expense_content
+    assert reconciled_expense.description not in expense_content
+
+
+@pytest.mark.django_db
+def test_staff_audit_page_supports_entity_id_date_range_and_entity_links(staff_client):
+    member = create_member("Audit Member", "audit-member@example.org")
+    included = log_audit_event(
+        actor="api",
+        actor_type="api",
+        entity_type="Member",
+        entity_id=str(member.pk),
+        action="member.updated",
+        before_json={"status": "ACTIVE"},
+        after_json={"status": "PAST_DUE"},
+        message="Status updated",
+    )
+    included.occurred_at = "2026-04-10T00:00:00Z"
+    included.save(update_fields=["occurred_at"])
+    excluded = log_audit_event(
+        actor="system",
+        actor_type="system",
+        entity_type="Member",
+        entity_id=str(member.pk),
+        action="member.updated",
+        message="Old status update",
+    )
+    excluded.occurred_at = "2026-03-10T00:00:00Z"
+    excluded.save(update_fields=["occurred_at"])
+    log_audit_event(
+        actor="system",
+        actor_type="system",
+        entity_type="Invoice",
+        entity_id="999",
+        action="invoice.issued",
+        message="Other entity",
+    )
+
+    response = staff_client.get(
+        "/staff/audit/",
+        {
+            "entity_type": "Member",
+            "entity_id": str(member.pk),
+            "occurred_from": "2026-04-01",
+            "occurred_to": "2026-04-30",
+        },
+    )
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    assert "Status updated" in content
+    assert "Old status update" not in content
+    assert "Other entity" not in content
+    assert f"/admin/members/member/{member.pk}/change/" in content
+    assert "status" in content
 
 
 @pytest.mark.django_db

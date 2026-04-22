@@ -20,11 +20,42 @@
 
 <section>
     <h2>Direct Actions</h2>
-    <p>
-        <a href="{% url 'staffops:member-list' %}">Open Member Search</a> |
-        <a href="{% url 'staffops:billing-dashboard' %}">Open Billing Operations</a> |
-        <a href="{% url 'staffops:expense-dashboard' %}">Import Expense CSV</a> |
+    <div class="actions">
+        <a href="{% url 'staffops:member-list' %}">Open Member Search</a>
+        <a href="{% url 'staffops:billing-dashboard' %}">Open Billing Operations</a>
+        <a href="{% url 'staffops:expense-dashboard' %}">Import Expense CSV</a>
         <a href="{% url 'staffops:reports-dashboard' %}">Open Reports</a>
+        <form method="post" action="{% url 'staffops:billing-run' %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="monthly_dues_close">
+            <button type="submit">Run Monthly Dues Close</button>
+        </form>
+        <form method="post" action="{% url 'staffops:billing-run' %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="dues_autopay_run">
+            <button type="submit">Run Autopay</button>
+        </form>
+        <form method="post" action="{% url 'staffops:refresh-allowlist' %}" class="inline">
+            {% csrf_token %}
+            <button type="submit">Refresh Allowlist</button>
+        </form>
+    </div>
+</section>
+
+<section>
+    <h2>Common Queues</h2>
+    <p>
+        <a href="{{ member_queue_urls.active }}">Active Members</a> |
+        <a href="{{ member_queue_urls.past_due }}">Past Due Members</a> |
+        <a href="{{ member_queue_urls.suspended }}">Suspended Members</a> |
+        <a href="{{ member_queue_urls.autopay }}">Autopay Enabled</a> |
+        <a href="{{ member_queue_urls.door_access }}">Door Access Enabled</a>
+    </p>
+    <p>
+        <a href="{{ billing_queue_urls.overdue }}">Overdue Invoices</a> |
+        <a href="{{ billing_queue_urls.unreconciled_stripe }}">Unreconciled Stripe Payments</a> |
+        <a href="{{ expense_queue_urls.uncategorized }}">Uncategorized Expenses</a> |
+        <a href="{{ expense_queue_urls.needs_reconciliation }}">Needs Reconciliation</a>
     </p>
 </section>
 

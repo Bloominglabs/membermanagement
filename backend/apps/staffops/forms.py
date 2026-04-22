@@ -4,9 +4,17 @@ from django import forms
 
 from apps.billing.models import Payment
 
+MANUAL_PAYMENT_METHOD_CHOICES = [
+    (Payment.PaymentMethod.CASH, "Cash"),
+    (Payment.PaymentMethod.CHECK, "Check"),
+    (Payment.PaymentMethod.BANK_TRANSFER, "Bank transfer"),
+    (Payment.PaymentMethod.OTHER, "Other"),
+]
+
 
 class ManualPaymentForm(forms.Form):
     amount_cents = forms.IntegerField(min_value=1)
+    payment_method = forms.ChoiceField(choices=MANUAL_PAYMENT_METHOD_CHOICES, required=False)
     source_type = forms.ChoiceField(choices=Payment.SourceType.choices)
     note = forms.CharField(required=False)
 
@@ -63,5 +71,8 @@ class ReportFilterForm(forms.Form):
 
 class AuditFilterForm(forms.Form):
     entity_type = forms.CharField(max_length=100, required=False)
+    entity_id = forms.CharField(max_length=100, required=False)
     action = forms.CharField(max_length=100, required=False)
     actor = forms.CharField(max_length=255, required=False)
+    occurred_from = forms.DateField(input_formats=["%Y-%m-%d"], required=False)
+    occurred_to = forms.DateField(input_formats=["%Y-%m-%d"], required=False)

@@ -5,6 +5,24 @@
 
 {% block content %}
 <section>
+    <h2>Queues and Escape Hatches</h2>
+    <p>
+        <a href="{{ expense_queue_urls.uncategorized }}">Uncategorized Queue</a> |
+        <a href="{{ expense_queue_urls.needs_reconciliation }}">Needs Reconciliation Queue</a>
+    </p>
+    <p>
+        <a href="{{ expense_batches_api_url }}">Open import batches API</a> |
+        <a href="{{ expense_import_admin_url }}">Open import batch admin</a> |
+        <a href="{{ expense_transaction_admin_url }}">Open transaction admin</a> |
+        <a href="{{ expense_rule_admin_url }}">Open categorization rules admin</a> |
+        <a href="{{ expense_rule_api_url }}">Open categorization rules API</a>
+    </p>
+    {% if active_queue %}
+    <p class="muted">Current queue: <strong>{{ active_queue }}</strong></p>
+    {% endif %}
+</section>
+
+<section>
     <h2>Import Expense CSV</h2>
     <form method="post" action="{% url 'staffops:expense-import' %}">
         {% csrf_token %}

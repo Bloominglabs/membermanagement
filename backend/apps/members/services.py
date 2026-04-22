@@ -171,7 +171,7 @@ def update_member_status_from_balance(member: Member, as_of: date | None = None)
 
     if balance.arrears_months >= settings.ARREARS_SUSPENSION_MONTHS and as_of.day >= settings.DUES_DUE_DAY:
         new_status = Member.Status.SUSPENDED
-    elif balance.receivable_cents > 0:
+    elif balance.arrears_months > 0:
         new_status = Member.Status.PAST_DUE
     else:
         new_status = Member.Status.ACTIVE
