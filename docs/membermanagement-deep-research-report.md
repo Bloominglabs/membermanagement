@@ -1,5 +1,7 @@
 # Bloominglabs Membership, Access, and Finance System Spec for Codex
 
+Reference research document. This file captures background analysis and source-linked synthesis; use [`spec.md`](./spec.md) and the ADRs for current implementation authority.
+
 ## Executive summary
 
 Bloominglabs has two membership classes—full-dues members (voting) and hardship members (reduced dues, non-voting)—and dues are monthly. citeturn7search6turn7search3 You also need to support **prepayment credits** (pay-ahead balances) and **debts** (arrears), and you want a continuously generated **Financial Report** over an arbitrary period covering dues, donations (tagged/designated), other income, and categorized expenses (ideally imported from the bank). Your existing historical documentation explicitly calls out “pay ahead” credit handling as a pain point in prior systems, so this is a first-class requirement, not an edge case. citeturn7search2

@@ -25,6 +25,7 @@ from apps.billing.services import (
     monthly_dues_close,
     reconcile_unposted_stripe_payments,
     record_manual_payment,
+    stripe_reconciliation_sync,
     void_invoice,
     dues_autopay_run,
 )
@@ -518,8 +519,16 @@ def billing_run(request):
         updated = _run_enforcement()
         messages.success(request, f"Updated {updated} member statuses.")
     else:
-        pending = reconcile_unposted_stripe_payments()
-        messages.info(request, f"{pending} Stripe payments still need reconciliation.")
+        result = stripe_reconciliation_sync()
+        if not result.configured:
+            messages.warning(request, f"Stripe is not configured; {result.pending_count} payments still need reconciliation.")
+        else:
+            messages.info(
+                request,
+                "Stripe reconciliation sync scanned "
+                f"{result.scanned_count} payments, reconciled {result.reconciled_count}, "
+                f"left {result.pending_count} pending, and hit {result.error_count} lookup errors.",
+            )
     return redirect("staffops:billing-dashboard")
 
 

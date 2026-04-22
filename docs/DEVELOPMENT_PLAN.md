@@ -1,5 +1,7 @@
 # Membership Manager — Development Plan & Handoff Document
 
+Historical prototype document. This file describes the earlier Google Sheets and PayPal direction and is retained only for reference; it is not authoritative for the current Django/Postgres system.
+
 **Version:** 2.1 (handoff)  
 **Date:** February 23, 2026  
 **Platform:** Google Sheets + Google Apps Script + PayPal Invoicing API v2  

@@ -29,5 +29,5 @@ For the actual Treasurer-facing deployment, run the core stack plus [`infra/dock
 
 ## Key assumptions
 
-- Relevant project documentation now lives under [`docs/`](docs/), especially [`docs/architecture.md`](docs/architecture.md), [`docs/admin-ui.md`](docs/admin-ui.md), [`docs/qa-hosting.md`](docs/qa-hosting.md), [`docs/spec.md`](docs/spec.md), [`docs/CULMINATION_SPEC.md`](docs/CULMINATION_SPEC.md), [`docs/membermanagement-deep-research-report.md`](docs/membermanagement-deep-research-report.md), and the historical handoff document [`docs/DEVELOPMENT_PLAN.md`](docs/DEVELOPMENT_PLAN.md).
+- Relevant project documentation now lives under [`docs/`](docs/). Start with the documentation index at [`docs/README.md`](docs/README.md), which distinguishes current authority docs from reference and historical material.
 - The shared ChatGPT conversation was not retrievable from this environment, so any requirements unique to that conversation still need to be folded in once you provide accessible text.

@@ -19,11 +19,12 @@ The repository contained both an older Google Sheets/Apps Script handoff and a n
 - Stripe-first billing path
 - Every.org donation ingestion
 - CSV exports and JSON financial report
-- Management commands and Celery tasks for dues close, scheduled invoice generation, enforcement, reconciliation reporting, and allowlist refresh
+- Management commands and Celery tasks for dues close, scheduled invoice generation, enforcement, Stripe balance-transaction reconciliation sync, and allowlist refresh
 - Thin server-rendered staff operations UI under `/staff/`, alongside Django admin for raw-model access
 - On-prem polling agent stub for RFID allowlist sync, kept separate from the public deployment stack
 
 ## Known gaps
 
-- Stripe reconciliation and off-session autopay are scaffolded but not yet covered by end-to-end integration tests against Stripe
+- Stripe reconciliation currently backfills Stripe charge and balance-transaction identifiers, but it does not yet model fees, payouts, disputes, or bank matching as first-class local accounting records
+- Off-session autopay is still not covered by end-to-end integration tests against Stripe
 - The access agent currently caches allowlist snapshots; hardware bridge behavior still needs the actual door-controller protocol

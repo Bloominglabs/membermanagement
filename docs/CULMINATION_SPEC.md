@@ -1,5 +1,7 @@
 # Bloominglabs Membership, Clients, Billing, and Finance System
 
+Reference implementation seed. This document remains useful background, but [`spec.md`](./spec.md), [`architecture.md`](./architecture.md), and the ADRs are the current source of truth.
+
 ## Codex Implementation Specification v1
 
 ### 1. Product goal

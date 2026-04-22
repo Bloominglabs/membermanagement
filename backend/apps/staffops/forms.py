@@ -47,7 +47,7 @@ class BillingRunForm(forms.Form):
             (ACTION_SCHEDULED_INVOICES, "Scheduled invoice generation"),
             (ACTION_AUTOPAY, "Autopay run"),
             (ACTION_ENFORCEMENT, "Status enforcement"),
-            (ACTION_RECONCILIATION, "Stripe reconciliation check"),
+            (ACTION_RECONCILIATION, "Stripe reconciliation sync"),
         ]
     )
 

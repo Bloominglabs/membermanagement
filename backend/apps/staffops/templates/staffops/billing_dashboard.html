@@ -40,7 +40,7 @@
         <form method="post" action="{% url 'staffops:billing-run' %}" class="inline">
             {% csrf_token %}
             <input type="hidden" name="action" value="stripe_reconciliation_sync">
-            <button type="submit">Run Stripe Reconciliation Check</button>
+            <button type="submit">Run Stripe Reconciliation Sync</button>
         </form>
     </div>
 </section>

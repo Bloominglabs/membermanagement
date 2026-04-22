@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from celery import shared_task
 
-from apps.billing.services import dues_autopay_run, generate_due_scheduled_invoices, monthly_dues_close, reconcile_unposted_stripe_payments
+from apps.billing.services import dues_autopay_run, generate_due_scheduled_invoices, monthly_dues_close, stripe_reconciliation_sync
 
 
 @shared_task
@@ -22,4 +22,4 @@ def dues_autopay_run_task() -> int:
 
 @shared_task
 def stripe_reconciliation_sync_task() -> int:
-    return reconcile_unposted_stripe_payments()
+    return stripe_reconciliation_sync().reconciled_count

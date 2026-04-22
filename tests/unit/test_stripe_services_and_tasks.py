@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from apps.billing.models import Payment, ProcessorPaymentMethod
+from apps.billing.models import Payment, ProcessorChoices, ProcessorPaymentMethod
 from apps.members.models import Client, Member
 
 
@@ -156,13 +156,133 @@ def test_dues_autopay_run_creates_off_session_payment_intent(settings, monkeypat
 
 
 @pytest.mark.django_db
+def test_stripe_reconciliation_sync_backfills_balance_transaction_from_payment_intent(settings, monkeypatch):
+    settings.STRIPE_SECRET_KEY = "sk_test"
+    member = create_member()
+    payment = Payment.objects.create(
+        client=member.client,
+        member=member,
+        amount_cents=5000,
+        currency="usd",
+        payment_method=Payment.PaymentMethod.STRIPE_CARD,
+        source_type=Payment.SourceType.DUES_PAYMENT,
+        status=Payment.Status.SUCCEEDED,
+        processor=ProcessorChoices.STRIPE,
+        processor_payment_id="pi_reconcile_1",
+    )
+    captured = {}
+
+    def fake_payment_intent_retrieve(payment_intent_id, **kwargs):
+        captured["payment_intent_id"] = payment_intent_id
+        captured["expand"] = kwargs.get("expand")
+        return {
+            "id": payment_intent_id,
+            "latest_charge": {
+                "id": "ch_reconcile_1",
+                "balance_transaction": {"id": "txn_reconcile_1"},
+            },
+        }
+
+    monkeypatch.setattr("apps.billing.services.stripe.PaymentIntent.retrieve", fake_payment_intent_retrieve)
+
+    from apps.billing.services import stripe_reconciliation_sync
+
+    result = stripe_reconciliation_sync()
+    payment.refresh_from_db()
+
+    assert captured["payment_intent_id"] == "pi_reconcile_1"
+    assert captured["expand"] == ["latest_charge.balance_transaction"]
+    assert result.scanned_count == 1
+    assert result.reconciled_count == 1
+    assert result.pending_count == 0
+    assert result.error_count == 0
+    assert payment.processor_charge_id == "ch_reconcile_1"
+    assert payment.processor_balance_txn_id == "txn_reconcile_1"
+
+
+@pytest.mark.django_db
+def test_stripe_reconciliation_sync_falls_back_to_charge_lookup(settings, monkeypatch):
+    settings.STRIPE_SECRET_KEY = "sk_test"
+    member = create_member()
+    payment = Payment.objects.create(
+        client=member.client,
+        member=member,
+        amount_cents=2500,
+        currency="usd",
+        payment_method=Payment.PaymentMethod.STRIPE_CARD,
+        source_type=Payment.SourceType.DUES_PAYMENT,
+        status=Payment.Status.SUCCEEDED,
+        processor=ProcessorChoices.STRIPE,
+        processor_charge_id="ch_fallback_1",
+    )
+    captured = {}
+
+    def fake_charge_retrieve(charge_id, **kwargs):
+        captured["charge_id"] = charge_id
+        captured["expand"] = kwargs.get("expand")
+        return {
+            "id": charge_id,
+            "balance_transaction": {"id": "txn_fallback_1"},
+        }
+
+    monkeypatch.setattr("apps.billing.services.stripe.Charge.retrieve", fake_charge_retrieve)
+
+    from apps.billing.services import stripe_reconciliation_sync
+
+    result = stripe_reconciliation_sync()
+    payment.refresh_from_db()
+
+    assert captured["charge_id"] == "ch_fallback_1"
+    assert captured["expand"] == ["balance_transaction"]
+    assert result.scanned_count == 1
+    assert result.reconciled_count == 1
+    assert result.pending_count == 0
+    assert payment.processor_balance_txn_id == "txn_fallback_1"
+
+
+@pytest.mark.django_db
+def test_stripe_reconciliation_sync_returns_pending_when_not_configured(settings, monkeypatch):
+    settings.STRIPE_SECRET_KEY = ""
+    member = create_member()
+    Payment.objects.create(
+        client=member.client,
+        member=member,
+        amount_cents=1800,
+        currency="usd",
+        payment_method=Payment.PaymentMethod.STRIPE_CARD,
+        source_type=Payment.SourceType.DUES_PAYMENT,
+        status=Payment.Status.SUCCEEDED,
+        processor=ProcessorChoices.STRIPE,
+        processor_payment_id="pi_pending_1",
+    )
+    monkeypatch.setattr("apps.billing.services.stripe.PaymentIntent.retrieve", lambda *args, **kwargs: pytest.fail("unexpected Stripe API call"))
+
+    from apps.billing.services import stripe_reconciliation_sync
+
+    result = stripe_reconciliation_sync()
+
+    assert result.configured is False
+    assert result.scanned_count == 0
+    assert result.reconciled_count == 0
+    assert result.pending_count == 1
+    assert result.error_count == 0
+
+
+@pytest.mark.django_db
 def test_task_modules_delegate_to_services(monkeypatch):
     seen = {}
 
     monkeypatch.setattr("apps.billing.tasks.monthly_dues_close", lambda: ["a", "b"])
     monkeypatch.setattr("apps.billing.tasks.generate_due_scheduled_invoices", lambda: ["sched"])
     monkeypatch.setattr("apps.billing.tasks.dues_autopay_run", lambda: [{"member_id": 1}])
-    monkeypatch.setattr("apps.billing.tasks.reconcile_unposted_stripe_payments", lambda: 3)
+    monkeypatch.setattr(
+        "apps.billing.tasks.stripe_reconciliation_sync",
+        lambda: type(
+            "SyncResult",
+            (),
+            {"configured": True, "scanned_count": 3, "reconciled_count": 2, "pending_count": 1, "error_count": 0},
+        )(),
+    )
     monkeypatch.setattr("apps.access.tasks.build_allowlist_snapshot", lambda: type("Snap", (), {"etag": "etag123"})())
 
     def fake_update(member):
@@ -183,6 +303,6 @@ def test_task_modules_delegate_to_services(monkeypatch):
     assert monthly_dues_close_task() == 2
     assert scheduled_invoice_generation_task() == 1
     assert dues_autopay_run_task() == 1
-    assert stripe_reconciliation_sync_task() == 3
+    assert stripe_reconciliation_sync_task() == 2
     assert refresh_allowlist_task() == "etag123"
     assert enforcement_run_task() == 0 or enforcement_run_task() >= 0

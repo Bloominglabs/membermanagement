@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 
@@ -25,11 +26,22 @@ from apps.billing.models import (
 from apps.members.models import Client, Member
 from apps.members.services import get_member_balance, update_member_status_from_balance
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(slots=True)
 class AllocationResult:
     allocated_cents: int
     invoice_numbers: list[str]
+
+
+@dataclass(slots=True)
+class StripeReconciliationSyncResult:
+    configured: bool
+    scanned_count: int
+    reconciled_count: int
+    pending_count: int
+    error_count: int
 
 
 def calculate_due_date(issue_date: date, *, due_day: int | None = None, due_offset_days: int | None = None) -> date:
@@ -631,8 +643,105 @@ def reconcile_unposted_stripe_payments() -> int:
     return Payment.objects.filter(
         processor=ProcessorChoices.STRIPE,
         status=Payment.Status.SUCCEEDED,
-        processor_balance_txn_id__isnull=True,
+    ).filter(
+        Q(processor_balance_txn_id__isnull=True) | Q(processor_balance_txn_id=""),
     ).count()
+
+
+def _stripe_object_get(value, key: str, default=None):
+    if value is None:
+        return default
+    if isinstance(value, dict):
+        return value.get(key, default)
+    if hasattr(value, key):
+        return getattr(value, key)
+    try:
+        return value[key]
+    except (KeyError, TypeError, AttributeError):
+        return default
+
+
+def _stripe_charge_id(charge) -> str | None:
+    if isinstance(charge, str):
+        return charge
+    return _stripe_object_get(charge, "id")
+
+
+def _stripe_balance_txn_id(charge) -> str | None:
+    balance_transaction = _stripe_object_get(charge, "balance_transaction")
+    if isinstance(balance_transaction, str):
+        return balance_transaction
+    return _stripe_object_get(balance_transaction, "id")
+
+
+def _retrieve_charge_for_reconciliation(payment: Payment):
+    if payment.processor_payment_id:
+        payment_intent = stripe.PaymentIntent.retrieve(
+            payment.processor_payment_id,
+            expand=["latest_charge.balance_transaction"],
+        )
+        latest_charge = _stripe_object_get(payment_intent, "latest_charge")
+        if isinstance(latest_charge, str):
+            return stripe.Charge.retrieve(latest_charge, expand=["balance_transaction"])
+        if latest_charge is not None:
+            return latest_charge
+    if payment.processor_charge_id:
+        return stripe.Charge.retrieve(payment.processor_charge_id, expand=["balance_transaction"])
+    return None
+
+
+def stripe_reconciliation_sync() -> StripeReconciliationSyncResult:
+    if not stripe_configured():
+        return StripeReconciliationSyncResult(
+            configured=False,
+            scanned_count=0,
+            reconciled_count=0,
+            pending_count=reconcile_unposted_stripe_payments(),
+            error_count=0,
+        )
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    payments = list(
+        Payment.objects.filter(
+            processor=ProcessorChoices.STRIPE,
+            status=Payment.Status.SUCCEEDED,
+        )
+        .filter(Q(processor_balance_txn_id__isnull=True) | Q(processor_balance_txn_id=""))
+        .order_by("received_at", "id")
+    )
+    reconciled_count = 0
+    error_count = 0
+
+    for payment in payments:
+        try:
+            charge = _retrieve_charge_for_reconciliation(payment)
+        except Exception:
+            error_count += 1
+            logger.exception("Stripe reconciliation lookup failed for payment %s", payment.pk)
+            continue
+
+        charge_id = _stripe_charge_id(charge)
+        balance_txn_id = _stripe_balance_txn_id(charge)
+        update_fields: list[str] = []
+        if charge_id and payment.processor_charge_id != charge_id:
+            payment.processor_charge_id = charge_id
+            update_fields.append("processor_charge_id")
+        if balance_txn_id and payment.processor_balance_txn_id != balance_txn_id:
+            payment.processor_balance_txn_id = balance_txn_id
+            update_fields.append("processor_balance_txn_id")
+        if update_fields:
+            update_fields.append("updated_at")
+            payment.save(update_fields=update_fields)
+        if balance_txn_id:
+            reconciled_count += 1
+
+    return StripeReconciliationSyncResult(
+        configured=True,
+        scanned_count=len(payments),
+        reconciled_count=reconciled_count,
+        pending_count=reconcile_unposted_stripe_payments(),
+        error_count=error_count,
+    )
 
 
 def dues_autopay_run() -> list[dict]:

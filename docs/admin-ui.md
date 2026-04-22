@@ -101,7 +101,7 @@ These are the places where plain admin becomes circuitous or hides the real work
 |---|---|---|
 | Members | Unified member workspace | Staff need one screen showing identity, status, balance, invoices, payments, history, RFID, and actions |
 | Members | Member search / queue views | Staff need direct lists like Active, Past Due, Suspended, Autopay Enabled |
-| Billing | Billing operations console | Monthly close, autopay run, reconciliation checks, and invoice schedule runs are operational commands, not row edits |
+| Billing | Billing operations console | Monthly close, autopay run, reconciliation syncs, and invoice schedule runs are operational commands, not row edits |
 | Billing | Invoice / payment review lists | Staff need filters and direct resolution actions without hopping across models |
 | Expenses | CSV import and review | Import, dedupe, categorize, and reconcile is a workflow, not raw CRUD |
 | Access | Credential and allowlist operations | Staff need member-centric access management and snapshot refresh/status views |
@@ -212,7 +212,7 @@ Actions:
 - run scheduled invoice generation
 - run autopay
 - run member status enforcement
-- run Stripe reconciliation check
+- run Stripe reconciliation sync
 
 For each action, show:
 
