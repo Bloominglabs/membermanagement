@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   AuthenticationError,
   AuthorizationError,
+  NotFoundError,
   ValidationError
 } from "../../engine/errors.js";
 
@@ -127,7 +128,16 @@ function statusForError(error) {
     return 403;
   }
 
+  if (error instanceof NotFoundError) {
+    return 404;
+  }
+
   return 500;
+}
+
+function matchPath(pathname, expression) {
+  const match = pathname.match(expression);
+  return match ? match.slice(1) : null;
 }
 
 export function createAppServer(runtime) {
@@ -163,6 +173,118 @@ export function createAppServer(runtime) {
         return;
       }
 
+      if (request.method === "POST" && url.pathname === "/api/v1/members") {
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.createMember({
+          token: readBearerToken(request),
+          ...body
+        });
+        sendJson(response, 201, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/v1/applications") {
+        const payload = await runtime.engine.listApplications({
+          token: readBearerToken(request)
+        });
+        sendJson(response, 200, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/v1/self/sponsored-applications") {
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.submitSponsoredApplication({
+          token: readBearerToken(request),
+          ...body
+        });
+        sendJson(response, 201, payload, corsHeaders);
+        return;
+      }
+
+      const applicationReviewMatch = matchPath(url.pathname, /^\/api\/v1\/applications\/([^/]+)\/review$/);
+      if (request.method === "POST" && applicationReviewMatch) {
+        const [applicationId] = applicationReviewMatch;
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.reviewApplication({
+          token: readBearerToken(request),
+          applicationId,
+          decision: body.decision
+        });
+        sendJson(response, 200, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/v1/invoices") {
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.createInvoice({
+          token: readBearerToken(request),
+          ...body
+        });
+        sendJson(response, 201, payload, corsHeaders);
+        return;
+      }
+
+      const invoiceIssueMatch = matchPath(url.pathname, /^\/api\/v1\/invoices\/([^/]+)\/issue$/);
+      if (request.method === "POST" && invoiceIssueMatch) {
+        const [invoiceId] = invoiceIssueMatch;
+        const payload = await runtime.engine.issueInvoice({
+          token: readBearerToken(request),
+          invoiceId
+        });
+        sendJson(response, 200, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/v1/payments/manual") {
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.recordManualPayment({
+          token: readBearerToken(request),
+          ...body
+        });
+        sendJson(response, 201, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/v1/donations") {
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.recordDonation({
+          token: readBearerToken(request),
+          ...body
+        });
+        sendJson(response, 201, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/v1/self/prepayments") {
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.recordSelfPrepayment({
+          token: readBearerToken(request),
+          ...body
+        });
+        sendJson(response, 201, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/v1/self/donations") {
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.recordSelfDonation({
+          token: readBearerToken(request),
+          ...body
+        });
+        sendJson(response, 201, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/v1/self/cancellation") {
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.cancelOwnMembership({
+          token: readBearerToken(request),
+          ...body
+        });
+        sendJson(response, 200, payload, corsHeaders);
+        return;
+      }
+
       if (request.method === "GET" && url.pathname === "/api/v1/reports/financial-summary") {
         const payload = await runtime.engine.getFinancialSummary({
           token: readBearerToken(request)
@@ -186,4 +308,3 @@ export function createAppServer(runtime) {
     }
   });
 }
-

@@ -9,15 +9,18 @@
   <body>
     <main class="app-shell">
       <header class="hero">
-        <p class="eyebrow">Bloominglabs</p>
-        <h1>Member Management Admin</h1>
-        <p class="hero-copy">
-          Static admin client for the rewrite branch. Authenticate once, then use bearer-token API calls against the management engine.
-        </p>
+        <div>
+          <p class="eyebrow">Bloominglabs</p>
+          <h1>Member Management Admin</h1>
+          <p class="hero-copy">
+            Static admin client for the rewrite branch. It logs in once, holds a bearer token locally, and sends all operational requests to the management engine over the API boundary.
+          </p>
+        </div>
+        <button id="refresh-button" class="secondary-button" type="button">Refresh</button>
       </header>
 
       <section class="panel">
-        <form id="login-form" class="form-grid">
+        <form id="login-form" class="form-grid form-grid-tight">
           <label>
             Username
             <input id="username" name="username" autocomplete="username" value="admin">
@@ -31,7 +34,7 @@
         <p id="status" class="status">Not authenticated.</p>
       </section>
 
-      <section class="layout">
+      <section class="layout layout-three">
         <article class="panel">
           <h2>Financial Summary</h2>
           <dl id="summary" class="summary-list">
@@ -52,10 +55,125 @@
 
         <article class="panel">
           <h2>Members</h2>
-          <ul id="members" class="member-list">
+          <ul id="members" class="stack-list">
             <li>Pending login</li>
           </ul>
         </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Applications</h2>
+            <p class="muted-copy">Submitted sponsorship applications can be approved or rejected here.</p>
+          </div>
+          <ul id="applications" class="stack-list">
+            <li>Pending login</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="layout layout-two">
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Create Member</h2>
+            <p class="muted-copy">Adds a member record immediately.</p>
+          </div>
+          <form id="member-form" class="form-grid">
+            <label>
+              Full name
+              <input name="fullName" required>
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" required>
+            </label>
+            <label>
+              Dues class
+              <input name="duesClass" value="standard" required>
+            </label>
+            <button type="submit">Create Member</button>
+          </form>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Create Invoice</h2>
+            <p class="muted-copy">Creates a draft invoice and optionally issues it immediately.</p>
+          </div>
+          <form id="invoice-form" class="form-grid">
+            <label>
+              Member ID
+              <input name="memberId" required>
+            </label>
+            <label>
+              Description
+              <input name="description" required>
+            </label>
+            <label>
+              Amount (cents)
+              <input name="amountCents" type="number" min="1" required>
+            </label>
+            <label>
+              Due date
+              <input name="dueDate" type="date" required>
+            </label>
+            <label class="checkbox-row">
+              <input name="issueImmediately" type="checkbox" checked>
+              Issue immediately
+            </label>
+            <button type="submit">Create Invoice</button>
+          </form>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Record Manual Payment</h2>
+            <p class="muted-copy">Tracks checks, cash, or other non-processor receipts.</p>
+          </div>
+          <form id="payment-form" class="form-grid">
+            <label>
+              Member ID
+              <input name="memberId" required>
+            </label>
+            <label>
+              Amount (cents)
+              <input name="amountCents" type="number" min="1" required>
+            </label>
+            <label>
+              Method
+              <input name="method" value="check" required>
+            </label>
+            <button type="submit">Record Payment</button>
+          </form>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Record Donation</h2>
+            <p class="muted-copy">Captures donations independently from membership billing.</p>
+          </div>
+          <form id="donation-form" class="form-grid">
+            <label>
+              Donor name
+              <input name="donorName" required>
+            </label>
+            <label>
+              Amount (cents)
+              <input name="amountCents" type="number" min="1" required>
+            </label>
+            <label>
+              Source
+              <input name="source" value="manual" required>
+            </label>
+            <button type="submit">Record Donation</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Operation Log</h2>
+        <ul id="operation-log" class="stack-list">
+          <li>No actions recorded yet.</li>
+        </ul>
       </section>
     </main>
 
@@ -63,4 +181,3 @@
     <script type="module" src="./app.js"></script>
   </body>
 </html>
-

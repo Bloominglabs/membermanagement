@@ -9,11 +9,11 @@ This branch replaces the legacy Django monolith with a package-light JavaScript 
 
 ## Current Scope
 
-The first rewrite slice establishes:
+The rewrite now establishes:
 
-- a core engine with explicit authentication, authorization, and read use cases
-- in-memory repository adapters so the architecture is testable before a database choice is finalized
-- a minimal HTTP API adapter exposing health, login, member listing, and financial summary reads
+- a core engine with explicit authentication, authorization, and workflow use cases
+- in-memory and durable JSON-file repository adapters
+- a thin HTTP API adapter exposing health, login, staff operations, member self-service operations, and financial-summary reads
 - a static admin client that authenticates once and then uses a bearer token for subsequent API requests
 
 ## Architectural Direction
@@ -28,9 +28,28 @@ The first rewrite slice establishes:
 
 1. Install Node.js 18 or newer.
 2. Run `npm test`.
-3. Run `npm start`.
+3. Run `DATA_FILE_PATH=var/data/store.json npm start` for durable local testing, or `npm start` for demo mode.
 4. Open `http://127.0.0.1:3000/`.
 
 The working practices for this rewrite live in [`development-practices.md`](development-practices.md).
 
 The seed admin login for the first scaffold is `admin` / `change-me`.
+
+## Implemented API Surface
+
+- `POST /api/v1/session/login`
+- `GET /api/v1/members`
+- `POST /api/v1/members`
+- `GET /api/v1/applications`
+- `POST /api/v1/applications/:id/review`
+- `POST /api/v1/invoices`
+- `POST /api/v1/invoices/:id/issue`
+- `POST /api/v1/payments/manual`
+- `POST /api/v1/donations`
+- `POST /api/v1/self/prepayments`
+- `POST /api/v1/self/donations`
+- `POST /api/v1/self/cancellation`
+- `POST /api/v1/self/sponsored-applications`
+- `GET /api/v1/reports/financial-summary`
+
+Deployment-specific notes are in [`docs/deployment.md`](docs/deployment.md).

@@ -8,7 +8,10 @@
 
 ### Adapters
 
-`src/adapters/` contains implementation details for the engine ports. The first adapter is in-memory only so the rewrite can prove the boundaries before selecting a persistent store.
+`src/adapters/` contains implementation details for the engine ports. The rewrite currently ships:
+
+- an in-memory adapter for fast tests and demo startup
+- a JSON-file adapter for single-instance durable state
 
 ### HTTP Interface
 
@@ -18,11 +21,16 @@
 
 `frontend/admin/` is a standalone static site. It carries its own API base-url configuration and authenticates with a single login call that yields a bearer token for subsequent requests.
 
+## Current Workflows
+
+- Staff can create members, review sponsored applications, create and issue invoices, record manual payments, and record donations.
+- Member-self accounts can only prepay dues, donate, cancel their own membership, and submit sponsored applications.
+- Financial summaries are computed from stored invoices, payments, and donations rather than hard-coded report fixtures.
+
 ## Near-Term Follow-On ADRs
 
-- database adapter selection and migration strategy
-- durable token/session storage
+- networked database adapter selection and migration strategy
+- durable token/session expiry and revocation
 - Stripe and Every.org provider adapters
-- role policy expansion for self-service member actions and narrower staff roles
-- write-path use cases for membership, invoices, and payments
-
+- role policy expansion for narrower staff roles
+- write-path use cases for expenses, exports, access control, and reconciliation

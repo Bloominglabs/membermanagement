@@ -7,4 +7,4 @@ tests/
 .pytest_cache/
 .codex
 node_modules/
-
+var/

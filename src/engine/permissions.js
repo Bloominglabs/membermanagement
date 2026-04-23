@@ -4,7 +4,12 @@ import { AuthorizationError } from "./errors.js";
 // roles and member self-service permissions will follow in later ADRs.
 export const ROLE_PERMISSIONS = Object.freeze({
   "staff-admin": ["*"],
-  "member-self": []
+  "member-self": [
+    "self:prepay",
+    "self:donate",
+    "self:cancel",
+    "self:application:create"
+  ]
 });
 
 export function hasPermission(roles, permission) {
@@ -19,4 +24,3 @@ export function requirePermission({ roles, permission }) {
     throw new AuthorizationError("forbidden");
   }
 }
-
