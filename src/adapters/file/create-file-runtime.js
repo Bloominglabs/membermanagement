@@ -66,7 +66,8 @@ export async function createFileRuntime({
   dataFilePath,
   allowedOrigins = [],
   clock,
-  initialDocument
+  initialDocument,
+  sessionLifetimeMinutes
 }) {
   const document = initialDocument
     ? await ensureDocumentWithSeed(dataFilePath, initialDocument)
@@ -76,6 +77,7 @@ export async function createFileRuntime({
     document,
     allowedOrigins,
     clock,
+    sessionLifetimeMinutes,
     persistDocument: async (nextDocument) => {
       await writeDocumentAtomically(dataFilePath, nextDocument);
     }

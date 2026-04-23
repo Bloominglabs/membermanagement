@@ -12,7 +12,8 @@
 
 - an in-memory adapter for fast tests and demo startup
 - a JSON-file adapter for single-instance durable state
-- a PostgreSQL adapter for hosted durable state
+- a normalized PostgreSQL adapter for hosted durable state
+- a Cloud SQL connector bootstrap path for Cloud SQL for PostgreSQL
 
 ### HTTP Interface
 
@@ -28,11 +29,11 @@
 - Member-self accounts can only prepay dues, donate, cancel their own membership, and submit sponsored applications.
 - Financial summaries are computed from stored invoices, payments, and donations rather than hard-coded report fixtures.
 - Account credentials are stored as password hashes, not raw passwords.
+- Sessions expire and can be explicitly revoked through logout.
 
 ## Near-Term Follow-On ADRs
 
-- durable token/session expiry and revocation
 - Stripe and Every.org provider adapters
 - role policy expansion for narrower staff roles
-- normalized SQL persistence and transactional workflow boundaries
+- background cleanup for expired sessions and operational housekeeping
 - write-path use cases for expenses, exports, access control, and reconciliation

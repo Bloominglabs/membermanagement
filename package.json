@@ -8,6 +8,7 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@google-cloud/cloud-sql-connector": "^1.10.0",
     "pg": "^8.20.0",
     "pg-mem": "^3.0.14"
   }

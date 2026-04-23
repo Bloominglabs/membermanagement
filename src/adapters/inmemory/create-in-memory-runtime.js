@@ -14,6 +14,7 @@ export function createInMemoryRuntime(options = {}) {
       nextIds: options.nextIds
     }),
     allowedOrigins: options.allowedOrigins,
-    clock: options.clock
+    clock: options.clock,
+    sessionLifetimeMinutes: options.sessionLifetimeMinutes
   });
 }

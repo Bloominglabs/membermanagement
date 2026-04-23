@@ -11,8 +11,25 @@ import {
   requirePositiveInteger
 } from "./validators.js";
 
+const DEFAULT_SESSION_LIFETIME_MINUTES = 12 * 60;
+
 function nowIso(clock) {
   return clock().toISOString();
+}
+
+function resolveSessionLifetimeMinutes(value) {
+  if (Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+
+  return DEFAULT_SESSION_LIFETIME_MINUTES;
+}
+
+function computeSessionExpiry(clock, sessionLifetimeMinutes) {
+  const now = clock().getTime();
+  const durationMs = sessionLifetimeMinutes * 60 * 1000;
+
+  return new Date(now + durationMs).toISOString();
 }
 
 function presentAccount(account) {
@@ -103,6 +120,14 @@ async function authenticateSession(dependencies, token) {
 
   const session = await dependencies.sessions.read(token);
   if (!session) {
+    throw new AuthenticationError();
+  }
+
+  if (session.revokedAt) {
+    throw new AuthenticationError();
+  }
+
+  if (session.expiresAt && new Date(session.expiresAt) <= dependencies.clock()) {
     throw new AuthenticationError();
   }
 
@@ -228,7 +253,9 @@ export function createEngine(dependencies) {
     reports,
     sessions,
     passwords,
-    clock = () => new Date()
+    transactions,
+    clock = () => new Date(),
+    sessionLifetimeMinutes = DEFAULT_SESSION_LIFETIME_MINUTES
   } = dependencies;
 
   assertPort("accounts repository", accounts, ["findByUsername", "findById"]);
@@ -238,254 +265,325 @@ export function createEngine(dependencies) {
   assertPort("payments repository", payments, ["list", "listByMember", "create"]);
   assertPort("donations repository", donations, ["list", "create"]);
   assertPort("reports repository", reports, ["getFinancialSummary"]);
-  assertPort("sessions repository", sessions, ["issue", "read"]);
+  assertPort("sessions repository", sessions, ["issue", "read", "revoke"]);
   assertPort("password service", passwords, ["verify"]);
 
-  dependencies.clock = clock;
+  if (transactions) {
+    assertPort("transactions service", transactions, ["run"]);
+  }
+
+  const baseDependencies = {
+    accounts,
+    applications,
+    members,
+    invoices,
+    payments,
+    donations,
+    reports,
+    sessions,
+    passwords,
+    clock
+  };
+
+  const normalizedSessionLifetimeMinutes = resolveSessionLifetimeMinutes(sessionLifetimeMinutes);
+
+  const runRead = async (work) => work(baseDependencies);
+  const runWrite = async (work) => {
+    if (transactions) {
+      return transactions.run(work);
+    }
+
+    return work(baseDependencies);
+  };
 
   return {
     async login({ username, password }) {
-      const account = await accounts.findByUsername(username);
+      return runWrite(async (activeDependencies) => {
+        const account = await activeDependencies.accounts.findByUsername(username);
 
-      if (!account) {
-        throw new AuthenticationError("invalid credentials");
-      }
+        if (!account) {
+          throw new AuthenticationError("invalid credentials");
+        }
 
-      const passwordMatches = await passwords.verify({ account, password });
-      if (!passwordMatches) {
-        throw new AuthenticationError("invalid credentials");
-      }
+        const passwordMatches = await activeDependencies.passwords.verify({ account, password });
+        if (!passwordMatches) {
+          throw new AuthenticationError("invalid credentials");
+        }
 
-      const token = await sessions.issue({
-        accountId: account.id,
-        roles: account.roles
+        const token = await activeDependencies.sessions.issue({
+          accountId: account.id,
+          roles: account.roles,
+          issuedAt: nowIso(activeDependencies.clock),
+          expiresAt: computeSessionExpiry(
+            activeDependencies.clock,
+            normalizedSessionLifetimeMinutes
+          ),
+          revokedAt: null
+        });
+
+        return {
+          token,
+          account: presentAccount(account)
+        };
       });
+    },
 
-      return {
-        token,
-        account: presentAccount(account)
-      };
+    async logout({ token }) {
+      return runWrite(async (activeDependencies) => {
+        await authenticateSession(activeDependencies, token);
+        await activeDependencies.sessions.revoke(
+          token,
+          nowIso(activeDependencies.clock)
+        );
+        return {};
+      });
     },
 
     async listMembers({ token }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "members:read" });
+      return runRead(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "members:read" });
 
-      const items = await members.list();
+        const items = await activeDependencies.members.list();
 
-      return {
-        items: items.map((member) => presentMember(member))
-      };
+        return {
+          items: items.map((member) => presentMember(member))
+        };
+      });
     },
 
     async createMember({ token, fullName, email, duesClass, status = "active", sponsorMemberId = null }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "members:write" });
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "members:write" });
 
-      const member = await members.create({
-        fullName: requireNonEmptyString("fullName", fullName),
-        email: requireNonEmptyString("email", email),
-        duesClass: requireNonEmptyString("duesClass", duesClass),
-        status: requireNonEmptyString("status", status),
-        sponsorMemberId,
-        createdAt: nowIso(clock)
+        const member = await activeDependencies.members.create({
+          fullName: requireNonEmptyString("fullName", fullName),
+          email: requireNonEmptyString("email", email),
+          duesClass: requireNonEmptyString("duesClass", duesClass),
+          status: requireNonEmptyString("status", status),
+          sponsorMemberId,
+          createdAt: nowIso(activeDependencies.clock)
+        });
+
+        return presentMember(member);
       });
-
-      return presentMember(member);
     },
 
     async submitSponsoredApplication({ token, applicantName, applicantEmail, notes = "" }) {
-      const { account } = await authenticateSession(dependencies, token);
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
 
-      const sponsorMemberId = account.memberId ?? null;
+        const sponsorMemberId = account.memberId ?? null;
 
-      if (account.roles.includes("member-self")) {
-        requirePermission({ roles: account.roles, permission: "self:application:create" });
-        requireMemberSelfAccount(account);
-      } else {
-        requirePermission({ roles: account.roles, permission: "members:write" });
-      }
+        if (account.roles.includes("member-self")) {
+          requirePermission({ roles: account.roles, permission: "self:application:create" });
+          requireMemberSelfAccount(account);
+        } else {
+          requirePermission({ roles: account.roles, permission: "members:write" });
+        }
 
-      const application = await applications.create({
-        applicantName: requireNonEmptyString("applicantName", applicantName),
-        applicantEmail: requireNonEmptyString("applicantEmail", applicantEmail),
-        notes: typeof notes === "string" ? notes.trim() : "",
-        sponsorMemberId,
-        status: "submitted",
-        createdAt: nowIso(clock)
+        const application = await activeDependencies.applications.create({
+          applicantName: requireNonEmptyString("applicantName", applicantName),
+          applicantEmail: requireNonEmptyString("applicantEmail", applicantEmail),
+          notes: typeof notes === "string" ? notes.trim() : "",
+          sponsorMemberId,
+          status: "submitted",
+          createdAt: nowIso(activeDependencies.clock)
+        });
+
+        return presentApplication(application);
       });
-
-      return presentApplication(application);
     },
 
     async listApplications({ token }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "members:read" });
+      return runRead(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "members:read" });
 
-      const items = await applications.list();
+        const items = await activeDependencies.applications.list();
 
-      return {
-        items: items.map((application) => presentApplication(application))
-      };
+        return {
+          items: items.map((application) => presentApplication(application))
+        };
+      });
     },
 
     async reviewApplication({ token, applicationId, decision }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "members:write" });
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "members:write" });
 
-      const application = await requireExistingApplication(dependencies, applicationId);
-      if (application.status !== "submitted") {
-        throw new ValidationError("only submitted applications can be reviewed");
-      }
+        const application = await requireExistingApplication(activeDependencies, applicationId);
+        if (application.status !== "submitted") {
+          throw new ValidationError("only submitted applications can be reviewed");
+        }
 
-      const normalizedDecision = requireDecision(decision);
-      const reviewedAt = nowIso(clock);
+        const normalizedDecision = requireDecision(decision);
+        const reviewedAt = nowIso(activeDependencies.clock);
 
-      if (normalizedDecision === "reject") {
-        const rejectedApplication = await applications.update(application.id, {
-          status: "rejected",
-          reviewedAt,
-          reviewedByAccountId: account.id
+        if (normalizedDecision === "reject") {
+          const rejectedApplication = await activeDependencies.applications.update(application.id, {
+            status: "rejected",
+            reviewedAt,
+            reviewedByAccountId: account.id
+          });
+
+          return presentApplication(rejectedApplication);
+        }
+
+        const member = await activeDependencies.members.create({
+          fullName: application.applicantName,
+          email: application.applicantEmail,
+          duesClass: "standard",
+          status: "applicant",
+          sponsorMemberId: application.sponsorMemberId,
+          createdAt: reviewedAt
         });
 
-        return presentApplication(rejectedApplication);
-      }
+        const approvedApplication = await activeDependencies.applications.update(application.id, {
+          status: "approved",
+          reviewedAt,
+          reviewedByAccountId: account.id,
+          memberId: member.id
+        });
 
-      const member = await members.create({
-        fullName: application.applicantName,
-        email: application.applicantEmail,
-        duesClass: "standard",
-        status: "applicant",
-        sponsorMemberId: application.sponsorMemberId,
-        createdAt: reviewedAt
+        return presentApplication(approvedApplication, member);
       });
-
-      const approvedApplication = await applications.update(application.id, {
-        status: "approved",
-        reviewedAt,
-        reviewedByAccountId: account.id,
-        memberId: member.id
-      });
-
-      return presentApplication(approvedApplication, member);
     },
 
     async createInvoice({ token, memberId, description, amountCents, dueDate }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "billing:write" });
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "billing:write" });
 
-      await requireExistingMember(dependencies, memberId);
+        await requireExistingMember(activeDependencies, memberId);
 
-      const invoice = await invoices.create({
-        memberId,
-        description: requireNonEmptyString("description", description),
-        amountCents: requirePositiveInteger("amountCents", amountCents),
-        dueDate: requireNonEmptyString("dueDate", dueDate),
-        status: "draft",
-        createdAt: nowIso(clock),
-        createdByAccountId: account.id
+        const invoice = await activeDependencies.invoices.create({
+          memberId,
+          description: requireNonEmptyString("description", description),
+          amountCents: requirePositiveInteger("amountCents", amountCents),
+          dueDate: requireNonEmptyString("dueDate", dueDate),
+          status: "draft",
+          createdAt: nowIso(activeDependencies.clock),
+          createdByAccountId: account.id
+        });
+
+        return presentInvoice(invoice);
       });
-
-      return presentInvoice(invoice);
     },
 
     async issueInvoice({ token, invoiceId }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "billing:write" });
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "billing:write" });
 
-      const invoice = await requireExistingInvoice(dependencies, invoiceId);
-      if (invoice.status !== "draft") {
-        throw new ValidationError("only draft invoices can be issued");
-      }
+        const invoice = await requireExistingInvoice(activeDependencies, invoiceId);
+        if (invoice.status !== "draft") {
+          throw new ValidationError("only draft invoices can be issued");
+        }
 
-      const updatedInvoice = await invoices.update(invoice.id, {
-        status: "issued",
-        issuedAt: nowIso(clock),
-        issuedByAccountId: account.id
+        const updatedInvoice = await activeDependencies.invoices.update(invoice.id, {
+          status: "issued",
+          issuedAt: nowIso(activeDependencies.clock),
+          issuedByAccountId: account.id
+        });
+
+        return presentInvoice(updatedInvoice);
       });
-
-      return presentInvoice(updatedInvoice);
     },
 
     async recordManualPayment({ token, memberId, amountCents, method }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "billing:write" });
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "billing:write" });
 
-      return recordPaymentForMember(dependencies, {
-        memberId,
-        amountCents,
-        method,
-        source: "manual",
-        recordedByAccountId: account.id
+        return recordPaymentForMember(activeDependencies, {
+          memberId,
+          amountCents,
+          method,
+          source: "manual",
+          recordedByAccountId: account.id
+        });
       });
     },
 
     async recordSelfPrepayment({ token, amountCents, method }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "self:prepay" });
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "self:prepay" });
 
-      return recordPaymentForMember(dependencies, {
-        memberId: requireMemberSelfAccount(account),
-        amountCents,
-        method,
-        source: "self-prepay",
-        recordedByAccountId: account.id
+        return recordPaymentForMember(activeDependencies, {
+          memberId: requireMemberSelfAccount(account),
+          amountCents,
+          method,
+          source: "self-prepay",
+          recordedByAccountId: account.id
+        });
       });
     },
 
     async recordDonation({ token, donorName, amountCents, source }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "donations:write" });
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "donations:write" });
 
-      const donation = await donations.create({
-        donorName: requireNonEmptyString("donorName", donorName),
-        amountCents: requirePositiveInteger("amountCents", amountCents),
-        source: requireNonEmptyString("source", source),
-        receivedAt: nowIso(clock),
-        recordedByAccountId: account.id
+        const donation = await activeDependencies.donations.create({
+          donorName: requireNonEmptyString("donorName", donorName),
+          amountCents: requirePositiveInteger("amountCents", amountCents),
+          source: requireNonEmptyString("source", source),
+          receivedAt: nowIso(activeDependencies.clock),
+          recordedByAccountId: account.id
+        });
+
+        return presentDonation(donation);
       });
-
-      return presentDonation(donation);
     },
 
     async recordSelfDonation({ token, amountCents, source }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "self:donate" });
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "self:donate" });
 
-      const member = await requireExistingMember(dependencies, requireMemberSelfAccount(account));
+        const member = await requireExistingMember(activeDependencies, requireMemberSelfAccount(account));
 
-      const donation = await donations.create({
-        donorName: member.fullName,
-        amountCents: requirePositiveInteger("amountCents", amountCents),
-        source: requireNonEmptyString("source", source),
-        receivedAt: nowIso(clock),
-        memberId: member.id
+        const donation = await activeDependencies.donations.create({
+          donorName: member.fullName,
+          amountCents: requirePositiveInteger("amountCents", amountCents),
+          source: requireNonEmptyString("source", source),
+          receivedAt: nowIso(activeDependencies.clock),
+          memberId: member.id
+        });
+
+        return presentDonation(donation);
       });
-
-      return presentDonation(donation);
     },
 
     async cancelOwnMembership({ token, reason = "" }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "self:cancel" });
+      return runWrite(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "self:cancel" });
 
-      const memberId = requireMemberSelfAccount(account);
-      await requireExistingMember(dependencies, memberId);
+        const memberId = requireMemberSelfAccount(account);
+        await requireExistingMember(activeDependencies, memberId);
 
-      const updatedMember = await members.update(memberId, {
-        status: "left",
-        leftAt: nowIso(clock),
-        cancellationReason: typeof reason === "string" ? reason.trim() : ""
+        const updatedMember = await activeDependencies.members.update(memberId, {
+          status: "left",
+          leftAt: nowIso(activeDependencies.clock),
+          cancellationReason: typeof reason === "string" ? reason.trim() : ""
+        });
+
+        return presentMember(updatedMember);
       });
-
-      return presentMember(updatedMember);
     },
 
     async getFinancialSummary({ token }) {
-      const { account } = await authenticateSession(dependencies, token);
-      requirePermission({ roles: account.roles, permission: "reports:read" });
+      return runRead(async (activeDependencies) => {
+        const { account } = await authenticateSession(activeDependencies, token);
+        requirePermission({ roles: account.roles, permission: "reports:read" });
 
-      return reports.getFinancialSummary();
+        return activeDependencies.reports.getFinancialSummary();
+      });
     }
   };
 }

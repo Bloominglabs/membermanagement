@@ -10,6 +10,7 @@ const invoiceForm = document.querySelector("#invoice-form");
 const paymentForm = document.querySelector("#payment-form");
 const donationForm = document.querySelector("#donation-form");
 const refreshButton = document.querySelector("#refresh-button");
+const logoutButton = document.querySelector("#logout-button");
 
 const statusElement = document.querySelector("#status");
 const summaryElement = document.querySelector("#summary");
@@ -51,6 +52,11 @@ function setAccount(account) {
   sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(account));
 }
 
+function clearSession() {
+  sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+  sessionStorage.removeItem(ACCOUNT_STORAGE_KEY);
+}
+
 function setStatus(message) {
   statusElement.textContent = message;
 }
@@ -72,6 +78,27 @@ function renderSummary(summary) {
     ["Receivable", formatMoney(summary.receivableCents, summary.currency)],
     ["Prepaid", formatMoney(summary.prepaidCents, summary.currency)],
     ["Donations YTD", formatMoney(summary.donationsYtdCents, summary.currency)]
+  ];
+
+  summaryElement.replaceChildren(
+    ...fields.map(([label, value]) => {
+      const row = document.createElement("div");
+      const term = document.createElement("dt");
+      const detail = document.createElement("dd");
+
+      term.textContent = label;
+      detail.textContent = value;
+      row.append(term, detail);
+      return row;
+    })
+  );
+}
+
+function renderPendingSummary(message = "Pending login") {
+  const fields = [
+    ["Receivable", message],
+    ["Prepaid", message],
+    ["Donations YTD", message]
   ];
 
   summaryElement.replaceChildren(
@@ -184,9 +211,10 @@ async function fetchJson(path, token, options = {}) {
     }
   });
 
-  const payload = await response.json();
+  const responseText = await response.text();
+  const payload = responseText ? JSON.parse(responseText) : null;
   if (!response.ok) {
-    throw new Error(payload.error || "request failed");
+    throw new Error(payload?.error || "request failed");
   }
 
   return payload;
@@ -197,6 +225,9 @@ async function refreshDashboard() {
 
   if (!token) {
     setStatus("Not authenticated.");
+    renderPendingSummary();
+    renderMembers([]);
+    renderApplications([]);
     return;
   }
 
@@ -355,6 +386,31 @@ refreshButton.addEventListener("click", () => {
   refreshDashboard().catch((error) => {
     setStatus(error.message);
   });
+});
+
+logoutButton.addEventListener("click", async () => {
+  const token = getToken();
+
+  if (!token) {
+    clearSession();
+    setStatus("Not authenticated.");
+    return;
+  }
+
+  try {
+    await fetchJson("/api/v1/session/logout", token, {
+      method: "POST"
+    });
+  } catch (error) {
+    setStatus(error.message);
+  } finally {
+    clearSession();
+    appendLog("Logged out.");
+    setStatus("Not authenticated.");
+    renderPendingSummary();
+    renderMembers([]);
+    renderApplications([]);
+  }
 });
 
 refreshDashboard().catch((error) => {

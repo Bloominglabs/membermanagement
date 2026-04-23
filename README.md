@@ -11,9 +11,9 @@ This branch replaces the legacy Django monolith with a package-light JavaScript 
 
 The rewrite now establishes:
 
-- a core engine with explicit authentication, authorization, and workflow use cases
-- in-memory, JSON-file, and PostgreSQL-backed repository adapters
-- a thin HTTP API adapter exposing health, login, staff operations, member self-service operations, and financial-summary reads
+- a core engine with explicit authentication, authorization, session lifecycle, and workflow use cases
+- in-memory, JSON-file, normalized PostgreSQL, and Cloud SQL connector-backed runtime paths
+- a thin HTTP API adapter exposing health, login/logout, staff operations, member self-service operations, and financial-summary reads
 - hashed account credentials plus configurable bootstrap admin seeding
 - a static admin client that authenticates once and then uses a bearer token for subsequent API requests
 
@@ -30,6 +30,7 @@ The rewrite now establishes:
 1. Install Node.js 18 or newer.
 2. Run `npm test`.
 3. Run one of:
+   `INSTANCE_CONNECTION_NAME=project:region:instance DB_USER=... DB_PASS=... DB_NAME=... npm start` for Cloud SQL connector mode
    `DATABASE_URL=postgres://... npm start` for hosted-style persistence
    `DATA_FILE_PATH=var/data/store.json npm start` for local durable testing
    `npm start` for demo mode
@@ -37,11 +38,12 @@ The rewrite now establishes:
 
 The working practices for this rewrite live in [`development-practices.md`](development-practices.md).
 
-The seed admin login for the first scaffold is `admin` / `change-me`.
+The default demo login is `admin` / `change-me`. For durable environments, set `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` before first boot.
 
 ## Implemented API Surface
 
 - `POST /api/v1/session/login`
+- `POST /api/v1/session/logout`
 - `GET /api/v1/members`
 - `POST /api/v1/members`
 - `GET /api/v1/applications`

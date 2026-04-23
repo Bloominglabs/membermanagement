@@ -266,6 +266,23 @@ function createSessionsRepository(state, access) {
       await access.refresh();
       const session = state.document.sessions.find((record) => record.token === token);
       return session ? clone(session) : null;
+    },
+
+    async revoke(token, revokedAt) {
+      await access.refresh();
+
+      const index = state.document.sessions.findIndex((record) => record.token === token);
+      if (index === -1) {
+        return null;
+      }
+
+      state.document.sessions[index] = {
+        ...state.document.sessions[index],
+        revokedAt
+      };
+
+      await access.persist();
+      return clone(state.document.sessions[index]);
     }
   };
 }
@@ -301,7 +318,8 @@ export function createDocumentRuntime({
   loadDocument = null,
   persistDocument = async () => {},
   allowedOrigins = [],
-  clock = () => new Date()
+  clock = () => new Date(),
+  sessionLifetimeMinutes
 } = {}) {
   const state = {
     document: normalizeDocument(clone(initialDocument ?? createDefaultDocument()))
@@ -326,7 +344,8 @@ export function createDocumentRuntime({
     reports: createReportsRepository(state, access, clock),
     sessions: createSessionsRepository(state, access),
     passwords: createPasswordService(),
-    clock
+    clock,
+    sessionLifetimeMinutes
   });
 
   return runtime;

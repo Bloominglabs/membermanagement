@@ -165,6 +165,14 @@ export function createAppServer(runtime) {
         return;
       }
 
+      if (request.method === "POST" && url.pathname === "/api/v1/session/logout") {
+        await runtime.engine.logout({
+          token: readBearerToken(request)
+        });
+        sendEmpty(response, 204, corsHeaders);
+        return;
+      }
+
       if (request.method === "GET" && url.pathname === "/api/v1/members") {
         const payload = await runtime.engine.listMembers({
           token: readBearerToken(request)
