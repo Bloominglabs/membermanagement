@@ -1,0 +1,139 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(255, 211, 128, 0.45), transparent 35%),
+    linear-gradient(180deg, #f6efe5 0%, #efe7db 100%);
+  color: #1e2430;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.app-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 48px 20px 64px;
+}
+
+.hero {
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.78rem;
+  color: #7a5431;
+}
+
+h1,
+h2 {
+  font-family: "Fraunces", "Georgia", serif;
+  margin: 0 0 12px;
+}
+
+.hero-copy {
+  max-width: 48rem;
+  line-height: 1.6;
+}
+
+.layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(122, 84, 49, 0.16);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 16px 40px rgba(64, 42, 21, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+input,
+button {
+  font: inherit;
+}
+
+input {
+  border: 1px solid #cdb89d;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fffdf9;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #7a5431, #ad6b2f);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.status {
+  margin: 12px 0 0;
+  color: #5a3821;
+}
+
+.summary-list {
+  display: grid;
+  gap: 12px;
+}
+
+.summary-list div,
+.member-list li {
+  background: rgba(246, 239, 229, 0.9);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.summary-list dt {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7a5431;
+}
+
+.summary-list dd {
+  margin: 6px 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.member-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 32px 16px 48px;
+  }
+}
+

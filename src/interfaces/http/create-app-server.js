@@ -1,0 +1,189 @@
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { dirname, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import {
+  AuthenticationError,
+  AuthorizationError,
+  ValidationError
+} from "../../engine/errors.js";
+
+const CURRENT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = join(CURRENT_DIRECTORY, "..", "..", "..");
+const FRONTEND_ROOT = join(PROJECT_ROOT, "frontend", "admin");
+
+const STATIC_FILES = new Map([
+  ["/", "index.html"],
+  ["/app.js", "app.js"],
+  ["/config.js", "config.js"],
+  ["/styles.css", "styles.css"]
+]);
+
+const CONTENT_TYPES = new Map([
+  [".html", "text/html; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"],
+  [".css", "text/css; charset=utf-8"]
+]);
+
+function readAllowedOrigin(origin, allowedOrigins) {
+  if (!origin) {
+    return null;
+  }
+
+  if (allowedOrigins.includes("*")) {
+    return origin;
+  }
+
+  return allowedOrigins.includes(origin) ? origin : null;
+}
+
+function buildCorsHeaders(origin, allowedOrigins) {
+  const allowedOrigin = readAllowedOrigin(origin, allowedOrigins);
+
+  if (!allowedOrigin) {
+    return {};
+  }
+
+  return {
+    "access-control-allow-origin": allowedOrigin,
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-headers": "authorization,content-type",
+    vary: "Origin"
+  };
+}
+
+function sendJson(response, statusCode, payload, extraHeaders = {}) {
+  response.writeHead(statusCode, {
+    "content-type": "application/json; charset=utf-8",
+    ...extraHeaders
+  });
+  response.end(JSON.stringify(payload));
+}
+
+function sendEmpty(response, statusCode, extraHeaders = {}) {
+  response.writeHead(statusCode, extraHeaders);
+  response.end();
+}
+
+async function readJsonBody(request) {
+  const chunks = [];
+
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+
+  const body = Buffer.concat(chunks).toString("utf8");
+  if (!body) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    throw new ValidationError("invalid json body");
+  }
+}
+
+function readBearerToken(request) {
+  const header = request.headers.authorization ?? "";
+  const [scheme, token] = header.split(" ");
+
+  if (scheme !== "Bearer" || !token) {
+    return null;
+  }
+
+  return token;
+}
+
+async function serveStaticAsset(pathname, response) {
+  const relativePath = STATIC_FILES.get(pathname);
+
+  if (!relativePath) {
+    return false;
+  }
+
+  const filePath = join(FRONTEND_ROOT, relativePath);
+  const body = await readFile(filePath);
+  const contentType = CONTENT_TYPES.get(extname(filePath)) ?? "application/octet-stream";
+
+  response.writeHead(200, {
+    "content-type": contentType
+  });
+  response.end(body);
+  return true;
+}
+
+function statusForError(error) {
+  if (error instanceof ValidationError) {
+    return 400;
+  }
+
+  if (error instanceof AuthenticationError) {
+    return 401;
+  }
+
+  if (error instanceof AuthorizationError) {
+    return 403;
+  }
+
+  return 500;
+}
+
+export function createAppServer(runtime) {
+  const allowedOrigins = runtime.config.allowedOrigins ?? [];
+
+  return createServer(async (request, response) => {
+    const url = new URL(request.url, "http://127.0.0.1");
+    const corsHeaders = buildCorsHeaders(request.headers.origin, allowedOrigins);
+
+    try {
+      if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
+        sendEmpty(response, 204, corsHeaders);
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname === "/healthz") {
+        sendJson(response, 200, { status: "ok" }, corsHeaders);
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/v1/session/login") {
+        const body = await readJsonBody(request);
+        const payload = await runtime.engine.login(body);
+        sendJson(response, 200, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/v1/members") {
+        const payload = await runtime.engine.listMembers({
+          token: readBearerToken(request)
+        });
+        sendJson(response, 200, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/v1/reports/financial-summary") {
+        const payload = await runtime.engine.getFinancialSummary({
+          token: readBearerToken(request)
+        });
+        sendJson(response, 200, payload, corsHeaders);
+        return;
+      }
+
+      if (request.method === "GET" && await serveStaticAsset(url.pathname, response)) {
+        return;
+      }
+
+      sendJson(response, 404, { error: "not found" }, corsHeaders);
+    } catch (error) {
+      sendJson(
+        response,
+        statusForError(error),
+        { error: error.message },
+        corsHeaders
+      );
+    }
+  });
+}
+

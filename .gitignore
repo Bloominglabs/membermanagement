@@ -1,0 +1,10 @@
+backend/
+onprem/
+tests/
+.pkg/
+.venv/
+.coverage
+.pytest_cache/
+.codex
+node_modules/
+
