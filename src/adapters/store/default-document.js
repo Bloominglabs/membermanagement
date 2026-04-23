@@ -1,5 +1,30 @@
+import { hashPassword, isPasswordHash } from "../../security/passwords.js";
+
 function clone(value) {
   return structuredClone(value);
+}
+
+function normalizeAccount(account) {
+  const normalized = { ...clone(account) };
+
+  if (isPasswordHash(normalized.passwordHash)) {
+    delete normalized.password;
+    return normalized;
+  }
+
+  if (typeof normalized.password === "string" && normalized.password.length > 0) {
+    normalized.passwordHash = hashPassword(normalized.password);
+    delete normalized.password;
+    return normalized;
+  }
+
+  return normalized;
+}
+
+export function normalizeDocument(document) {
+  const normalized = clone(document);
+  normalized.accounts = normalized.accounts.map((account) => normalizeAccount(account));
+  return normalized;
 }
 
 // The default seed keeps the rewrite runnable out of the box while also
@@ -17,7 +42,7 @@ const DEFAULT_DOCUMENT = Object.freeze({
     {
       id: "acct-admin",
       username: "admin",
-      password: "change-me",
+      passwordHash: hashPassword("change-me"),
       roles: ["staff-admin"]
     }
   ],
@@ -85,5 +110,5 @@ export function createDefaultDocument(overrides = {}) {
     document[key] = clone(value);
   }
 
-  return document;
+  return normalizeDocument(document);
 }

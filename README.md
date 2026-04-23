@@ -12,8 +12,9 @@ This branch replaces the legacy Django monolith with a package-light JavaScript 
 The rewrite now establishes:
 
 - a core engine with explicit authentication, authorization, and workflow use cases
-- in-memory and durable JSON-file repository adapters
+- in-memory, JSON-file, and PostgreSQL-backed repository adapters
 - a thin HTTP API adapter exposing health, login, staff operations, member self-service operations, and financial-summary reads
+- hashed account credentials plus configurable bootstrap admin seeding
 - a static admin client that authenticates once and then uses a bearer token for subsequent API requests
 
 ## Architectural Direction
@@ -28,7 +29,10 @@ The rewrite now establishes:
 
 1. Install Node.js 18 or newer.
 2. Run `npm test`.
-3. Run `DATA_FILE_PATH=var/data/store.json npm start` for durable local testing, or `npm start` for demo mode.
+3. Run one of:
+   `DATABASE_URL=postgres://... npm start` for hosted-style persistence
+   `DATA_FILE_PATH=var/data/store.json npm start` for local durable testing
+   `npm start` for demo mode
 4. Open `http://127.0.0.1:3000/`.
 
 The working practices for this rewrite live in [`development-practices.md`](development-practices.md).

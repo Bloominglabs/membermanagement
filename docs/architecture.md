@@ -12,6 +12,7 @@
 
 - an in-memory adapter for fast tests and demo startup
 - a JSON-file adapter for single-instance durable state
+- a PostgreSQL adapter for hosted durable state
 
 ### HTTP Interface
 
@@ -26,11 +27,12 @@
 - Staff can create members, review sponsored applications, create and issue invoices, record manual payments, and record donations.
 - Member-self accounts can only prepay dues, donate, cancel their own membership, and submit sponsored applications.
 - Financial summaries are computed from stored invoices, payments, and donations rather than hard-coded report fixtures.
+- Account credentials are stored as password hashes, not raw passwords.
 
 ## Near-Term Follow-On ADRs
 
-- networked database adapter selection and migration strategy
 - durable token/session expiry and revocation
 - Stripe and Every.org provider adapters
 - role policy expansion for narrower staff roles
+- normalized SQL persistence and transactional workflow boundaries
 - write-path use cases for expenses, exports, access control, and reconciliation
