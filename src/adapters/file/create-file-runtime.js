@@ -4,6 +4,9 @@ import { dirname } from "node:path";
 import { createDocumentRuntime } from "../store/create-document-runtime.js";
 import { createDefaultDocument, normalizeDocument } from "../store/default-document.js";
 
+// File runtime is the single-instance durable adapter. It persists the same
+// document shape as in-memory mode and uses atomic renames to reduce the chance
+// of leaving a partially written JSON file after a crash.
 function documentsEqual(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -33,6 +36,8 @@ async function ensureDocumentExists(dataFilePath) {
 }
 
 async function ensureDocumentWithSeed(dataFilePath, initialDocument) {
+  // A caller-provided seed is only used for first creation. Existing files are
+  // treated as the source of truth so restarts do not overwrite local state.
   await mkdir(dirname(dataFilePath), { recursive: true });
 
   try {

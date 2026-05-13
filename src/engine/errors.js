@@ -1,3 +1,6 @@
+// Engine errors describe domain failure categories without committing to an
+// interface. HTTP maps them to status codes; other adapters can choose their
+// own presentation.
 export class ConfigurationError extends Error {
   constructor(message) {
     super(message);

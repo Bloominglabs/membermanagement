@@ -1,5 +1,8 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
+// Password hashes are stored as "scrypt$salt$derivedKey" so repositories never
+// need raw passwords after bootstrap. The format is simple on purpose; future
+// work can add parameters or version tags without changing engine callers.
 const HASH_PREFIX = "scrypt";
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
@@ -30,4 +33,3 @@ export function verifyPassword({ password, passwordHash }) {
 
   return timingSafeEqual(expectedKey, actualKey);
 }
-

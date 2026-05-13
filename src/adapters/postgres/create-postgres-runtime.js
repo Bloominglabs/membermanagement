@@ -8,6 +8,9 @@ import { createDefaultDocument, normalizeDocument } from "../store/default-docum
 
 const { Pool } = pg;
 
+// PostgreSQL is the hosted persistence adapter for the workflows rebuilt on
+// this branch. It mirrors the engine repository ports with normalized tables,
+// while still accepting an ADR 0008 document-state seed for upgrade continuity.
 function clone(value) {
   return structuredClone(value);
 }
@@ -54,6 +57,9 @@ async function tableExists(db, tableName) {
 }
 
 async function ensureSchema(db) {
+  // ADR 0009 intentionally creates only the tables needed by the current
+  // workflow surface. Future ADRs should migrate this into explicit versioned
+  // schema changes before adding more production data shapes.
   await db.query(`
     create table if not exists accounts (
       id text,
@@ -169,6 +175,9 @@ async function clearNormalizedTables(db) {
 }
 
 async function seedFromDocument(db, document) {
+  // Seeding converts the document shape used by the in-memory/file runtimes
+  // into normalized rows. This keeps bootstrap data and legacy app_state
+  // migration on one path.
   const normalizedDocument = normalizeDocument(clone(document));
 
   await clearNormalizedTables(db);
@@ -340,6 +349,9 @@ async function seedFromDocument(db, document) {
 }
 
 async function loadLegacyDocument(db) {
+  // ADR 0008 stored the whole runtime state in app_state. New deployments do
+  // not create that table, but existing databases can be lifted into the
+  // normalized schema on first boot.
   if (!await tableExists(db, "app_state")) {
     return null;
   }
@@ -490,6 +502,9 @@ async function updateRecord(db, {
   columnMap,
   readById
 }) {
+  // Repository update methods pass domain field names. This helper limits SQL
+  // updates to the allowlisted column map so route payloads cannot choose
+  // arbitrary columns even if validation is expanded later.
   const entries = Object.entries(updates).filter(([key]) => key in columnMap);
 
   if (entries.length === 0) {
@@ -983,6 +998,9 @@ function createScopedDependencies(db, shared, includeTransactions) {
         const client = await db.connect();
 
         try {
+          // Engine write use cases may touch several repositories. Running them
+          // against a client-scoped dependency set keeps those multi-step
+          // changes atomic when the adapter owns a real PostgreSQL pool.
           await client.query("begin");
           const scopedDependencies = createScopedDependencies(
             client,

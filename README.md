@@ -28,7 +28,7 @@ The rewrite now establishes:
 ## Development
 
 1. Install Node.js 18 or newer.
-2. Run `npm test`.
+2. Run `npm test` for the default fast suite. Use `npm run test:extended` for the reserved slower-regression lane before major merges.
 3. Run one of:
    `INSTANCE_CONNECTION_NAME=project:region:instance DB_USER=... DB_PASS=... DB_NAME=... npm start` for Cloud SQL connector mode
    `DATABASE_URL=postgres://... npm start` for hosted-style persistence
@@ -36,7 +36,7 @@ The rewrite now establishes:
    `npm start` for demo mode
 4. Open `http://127.0.0.1:3000/`.
 
-The working practices for this rewrite live in [`development-practices.md`](development-practices.md).
+The working practices for this rewrite live in [`AGENTS.md`](AGENTS.md). Development history and review notes start at [`LOG.md`](LOG.md), while current coverage limitations are documented in [`docs/coverage.md`](docs/coverage.md).
 
 The default demo login is `admin` / `change-me`. For durable environments, set `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` before first boot.
 

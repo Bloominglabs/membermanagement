@@ -1,5 +1,7 @@
 import { ValidationError } from "./errors.js";
 
+// These validators intentionally cover only cross-workflow invariants. More
+// specific rules should live beside the use case that needs them.
 export function requireNonEmptyString(label, value) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new ValidationError(`${label} is required`);
@@ -23,4 +25,3 @@ export function requireDecision(value) {
 
   return value;
 }
-

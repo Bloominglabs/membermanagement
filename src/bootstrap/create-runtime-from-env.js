@@ -8,6 +8,9 @@ import { createDefaultDocument } from "../adapters/store/default-document.js";
 
 const { Pool } = pg;
 
+// Runtime bootstrap is the deployment switchboard. It keeps environment
+// parsing out of the server entrypoint and preserves a clear precedence:
+// Cloud SQL connector, direct PostgreSQL, JSON file, then in-memory demo mode.
 function parsePositiveInteger(value, fallback) {
   const parsedValue = Number.parseInt(value, 10);
 
@@ -58,6 +61,9 @@ function resolveCloudSqlIpType(env) {
 }
 
 function createSeedDocumentFromEnv(env) {
+  // Bootstrap credentials are only folded into the initial seed. Existing
+  // durable stores keep their persisted accounts and do not rotate credentials
+  // just because environment variables changed.
   if (!env.BOOTSTRAP_ADMIN_USERNAME && !env.BOOTSTRAP_ADMIN_PASSWORD) {
     return undefined;
   }
@@ -80,6 +86,8 @@ export async function createCloudSqlPoolFromEnv({
   ConnectorClass = Connector,
   PoolClass = Pool
 } = {}) {
+  // The connector returns socket/auth options while pg.Pool still owns query
+  // pooling. IAM database authentication intentionally omits DB_PASS.
   const connector = new ConnectorClass();
   const usesIamAuthentication = parseBoolean(env.DB_IAM_AUTH);
   const instanceConnectionName = requireEnvValue(env, "INSTANCE_CONNECTION_NAME");

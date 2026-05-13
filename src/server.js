@@ -1,6 +1,9 @@
 import { createRuntimeFromEnv } from "./bootstrap/create-runtime-from-env.js";
 import { createAppServer } from "./interfaces/http/create-app-server.js";
 
+// The server entrypoint does only runtime assembly and listen startup. All
+// deployment selection lives in bootstrap, and all request behavior lives in
+// the HTTP interface module.
 const runtime = await createRuntimeFromEnv();
 const server = createAppServer(runtime);
 const port = Number(process.env.PORT ?? 3000);

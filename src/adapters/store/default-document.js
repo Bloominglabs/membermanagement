@@ -1,5 +1,8 @@
 import { hashPassword, isPasswordHash } from "../../security/passwords.js";
 
+// The document shape is the common seed and interchange format for in-memory,
+// file, and PostgreSQL bootstrap paths. Normalization upgrades older plaintext
+// account seeds to password hashes before any runtime starts.
 function clone(value) {
   return structuredClone(value);
 }

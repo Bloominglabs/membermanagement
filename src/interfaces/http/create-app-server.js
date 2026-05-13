@@ -10,6 +10,9 @@ import {
   ValidationError
 } from "../../engine/errors.js";
 
+// The HTTP layer is intentionally thin: it translates request details into
+// engine calls, translates engine errors back to status codes, and serves the
+// static admin files for local/demo convenience.
 const CURRENT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(CURRENT_DIRECTORY, "..", "..", "..");
 const FRONTEND_ROOT = join(PROJECT_ROOT, "frontend", "admin");
@@ -40,6 +43,8 @@ function readAllowedOrigin(origin, allowedOrigins) {
 }
 
 function buildCorsHeaders(origin, allowedOrigins) {
+  // CORS is opt-in for API calls. Same-origin requests do not need these
+  // headers, and unlisted origins receive no browser-readable response.
   const allowedOrigin = readAllowedOrigin(origin, allowedOrigins);
 
   if (!allowedOrigin) {
@@ -116,6 +121,8 @@ async function serveStaticAsset(pathname, response) {
 }
 
 function statusForError(error) {
+  // Engine errors carry the domain meaning; this adapter owns only the HTTP
+  // status mapping so other interfaces can map the same errors differently.
   if (error instanceof ValidationError) {
     return 400;
   }
@@ -148,6 +155,9 @@ export function createAppServer(runtime) {
     const corsHeaders = buildCorsHeaders(request.headers.origin, allowedOrigins);
 
     try {
+      // Keep route matching explicit until the API surface is large enough to
+      // justify a router dependency. This makes each exposed workflow easy to
+      // audit against the README and engine methods.
       if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
         sendEmpty(response, 204, corsHeaders);
         return;

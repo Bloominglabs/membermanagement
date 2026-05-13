@@ -1,3 +1,6 @@
+// This static admin client deliberately avoids a frontend build step. It stores
+// the issued bearer token in sessionStorage, calls the versioned API directly,
+// and renders only the operational workflows rebuilt on this branch.
 const TOKEN_STORAGE_KEY = "membermanagement.admin.token";
 const ACCOUNT_STORAGE_KEY = "membermanagement.admin.account";
 
@@ -34,6 +37,8 @@ function setToken(token) {
 }
 
 function loadPersistedAccount() {
+  // Account details are presentation state only. A malformed stored value is
+  // discarded so the next refresh can fall back to token validation by the API.
   const raw = sessionStorage.getItem(ACCOUNT_STORAGE_KEY);
 
   if (!raw) {
@@ -203,6 +208,8 @@ function parseIntegerField(formData, fieldName) {
 }
 
 async function fetchJson(path, token, options = {}) {
+  // All API calls flow through this helper so bearer-token attachment and error
+  // message extraction stay consistent across the small no-framework UI.
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
     headers: {
@@ -221,6 +228,8 @@ async function fetchJson(path, token, options = {}) {
 }
 
 async function refreshDashboard() {
+  // The dashboard reads independent resources in parallel because none of
+  // these views depends on another view's response.
   const token = getToken();
 
   if (!token) {

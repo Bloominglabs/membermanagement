@@ -5,11 +5,16 @@ import { verifyPassword } from "../../security/passwords.js";
 import { computeFinancialSummary } from "./compute-financial-summary.js";
 import { createDefaultDocument, normalizeDocument } from "./default-document.js";
 
+// The document runtime backs both in-memory mode and JSON-file durability. It
+// deliberately implements the same repository ports as PostgreSQL so engine
+// tests can exercise business rules without database setup.
 function clone(value) {
   return structuredClone(value);
 }
 
 function createStateAccess(state, loadDocument, persistDocument) {
+  // File-backed mode reloads before each repository operation so a restarted
+  // runtime observes persisted changes. Pure in-memory mode skips that hook.
   const refresh = async () => {
     if (!loadDocument) {
       return state.document;
@@ -28,6 +33,8 @@ function createStateAccess(state, loadDocument, persistDocument) {
 }
 
 function createIdAllocator(state, access) {
+  // IDs stay deterministic and human-readable across adapters. The counters are
+  // part of the persisted document so restarts do not reuse identifiers.
   return async function allocateId(kind, prefix) {
     await access.refresh();
 
@@ -321,6 +328,8 @@ export function createDocumentRuntime({
   clock = () => new Date(),
   sessionLifetimeMinutes
 } = {}) {
+  // Every repository clones on the way in and out. That prevents callers from
+  // mutating the shared document by holding references returned from reads.
   const state = {
     document: normalizeDocument(clone(initialDocument ?? createDefaultDocument()))
   };

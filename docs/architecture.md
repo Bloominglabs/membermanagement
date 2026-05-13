@@ -37,3 +37,11 @@
 - role policy expansion for narrower staff roles
 - background cleanup for expired sessions and operational housekeeping
 - write-path use cases for expenses, exports, access control, and reconciliation
+
+## ADR Roadmap
+
+- ADR 0006 established the engine, versioned HTTP API, static admin shell, and repository-port boundary.
+- ADR 0007 added JSON-file durability and the first operational write workflows.
+- ADR 0008 added hosted PostgreSQL document persistence, password hashing, and bootstrap credential configuration.
+- ADR 0009 replaced PostgreSQL document storage with normalized tables, added session expiry and revocation, and added Cloud SQL connector runtime construction.
+- ADR 0010 aligned repository practices, documentation layers, test scripts, and coverage exception tracking with the active project standards.

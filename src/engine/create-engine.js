@@ -11,6 +11,10 @@ import {
   requirePositiveInteger
 } from "./validators.js";
 
+// The engine is the rewrite's business boundary. Every public method below
+// accepts plain data, authenticates and authorizes the caller, validates the
+// domain inputs, and delegates persistence only through repository ports. This
+// keeps HTTP, file storage, and PostgreSQL adapters replaceable.
 const DEFAULT_SESSION_LIFETIME_MINUTES = 12 * 60;
 
 function nowIso(clock) {
@@ -32,6 +36,9 @@ function computeSessionExpiry(clock, sessionLifetimeMinutes) {
   return new Date(now + durationMs).toISOString();
 }
 
+// Presenter helpers define the data contract returned to adapters. They also
+// strip storage-only fields such as password hashes and nullable implementation
+// details that callers should not need to reason about.
 function presentAccount(account) {
   return {
     id: account.id,
@@ -174,6 +181,9 @@ function requireMemberSelfAccount(account) {
   return account.memberId;
 }
 
+// Payments apply to the oldest issued invoices first. Any excess amount remains
+// represented by the payment record without an allocation, which is how the
+// financial-summary code later reports prepaid credit.
 async function recordPaymentForMember(dependencies, {
   memberId,
   amountCents,
@@ -287,6 +297,9 @@ export function createEngine(dependencies) {
 
   const normalizedSessionLifetimeMinutes = resolveSessionLifetimeMinutes(sessionLifetimeMinutes);
 
+  // Adapters that can provide transactions get a scoped dependency set for
+  // writes. In-memory and file-backed runtimes use the same callback shape
+  // without transaction wrapping, so use cases stay adapter-neutral.
   const runRead = async (work) => work(baseDependencies);
   const runWrite = async (work) => {
     if (transactions) {

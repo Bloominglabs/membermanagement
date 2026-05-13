@@ -1,3 +1,5 @@
+// Financial summaries are derived from source transactions instead of stored
+// report fixtures. That keeps file, in-memory, and PostgreSQL runtimes aligned.
 function sum(values) {
   return values.reduce((total, value) => total + value, 0);
 }
@@ -11,6 +13,8 @@ function appliedAmountForInvoice(invoiceId, payments) {
 }
 
 export function computeFinancialSummary({ invoices, payments, donations, year }) {
+  // Receivables count issued/paid invoices minus applied payments; any payment
+  // amount not allocated to an invoice remains prepaid credit.
   const receivableCents = sum(
     invoices
       .filter((invoice) => invoice.status === "issued" || invoice.status === "paid")
@@ -37,4 +41,3 @@ export function computeFinancialSummary({ invoices, payments, donations, year })
     donationsYtdCents
   };
 }
-
